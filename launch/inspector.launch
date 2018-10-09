@@ -1,0 +1,19 @@
+<launch>
+
+	<arg name="namespace" default="Gazebo"/>
+
+	<node pkg="inspector"
+		type="inspector_node"
+		name="inspector_node"
+		ns="$(arg namespace)"
+		output="screen">
+
+
+
+		<!-- Paths for waypoint files -->
+		<param name="localization_waypoints_path" value="$(find control_node)/waypoints/start2.wp"/>
+		<param name="inspection_waypoints_path" value="$(find control_node)/waypoints/topInspection.wp"/>
+
+	</node>
+
+</launch>

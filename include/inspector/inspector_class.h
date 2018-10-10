@@ -3,11 +3,17 @@
 #ifndef MAPPER_MAPPER_CLASS_H_
 #define MAPPER_MAPPER_CLASS_H_
 
+// Ros libraries
 #include <ros/ros.h>
+#include <tf/transform_listener.h>
 
 // Local defined libraries
 #include <inspector/structs.h>
 #include <inspector/helper.h>
+#include <inspector/tf_class.h>
+
+// Msg/srv defined in other packages
+#include "mav_trajectory_generation_ros/minSnapStamped.h"
 
 // Msg/srv types
 #include "std_srvs/Trigger.h"
@@ -67,7 +73,7 @@ class InspectorClass {
   // void FadeTask();
 
   // // Threads for constantly updating the tfTree values
-  // void HazTfTask();
+  void TfTask();
   // void PerchTfTask();
   // void BodyTfTask();
   // void TfTask(const std::string& parent_frame,
@@ -85,43 +91,47 @@ class InspectorClass {
 
  private:
   // Declare global variables (structures defined in structs.h)
-  // globalVariables globals_;  // These variables are all mutex-protected
-  // mutexStruct mutexes_;
+  globalVariables globals_;  // These variables are all mutex-protected
+  mutexStruct mutexes_;
   // semaphoreStruct semaphores_;
+
+  // Namespace of the current node
+  std::string ns_;
 
   // List of waypoints
   std::vector<xyz_heading> localization_waypoint_list_, inspection_waypoint_list_;
 
   // Thread variables
-  std::thread h_haz_tf_thread_, h_perch_tf_thread_, h_body_tf_thread_;
-  std::thread h_octo_thread_, h_fade_thread_, h_collision_check_thread_;
-  std::thread h_keyboard_thread_;
-  std::vector<std::thread> h_cameras_tf_thread_;
+  std::thread h_tf_thread_;
+  // std::thread h_haz_tf_thread_, h_perch_tf_thread_, h_body_tf_thread_;
+  // std::thread h_octo_thread_, h_fade_thread_, h_collision_check_thread_;
+  // std::thread h_keyboard_thread_;
+  // std::vector<std::thread> h_cameras_tf_thread_;
 
-  // Subscriber variables
-  ros::Subscriber haz_sub_, perch_sub_, segment_sub_;
-  std::vector<ros::Subscriber> cameras_sub_;
+  // // Subscriber variables
+  // ros::Subscriber haz_sub_, perch_sub_, segment_sub_;
+  // std::vector<ros::Subscriber> cameras_sub_;
 
-  // Octomap services
-  ros::ServiceServer resolution_srv_, memory_time_srv_;
-  ros::ServiceServer map_inflation_srv_, reset_map_srv_;
+  // // Octomap services
+  // ros::ServiceServer resolution_srv_, memory_time_srv_;
+  // ros::ServiceServer map_inflation_srv_, reset_map_srv_;
 
   // Thread rates (hz)
-  double tf_update_rate_, fading_memory_update_rate_;
+  double tf_update_rate_;
 
-  // Path planning services
-  ros::ServiceServer RRT_srv_, octoRRT_srv_, PRM_srv_, graph_srv_, Astar_srv_;
-  ros::ServiceServer newTraj_srv_;
+  // // Path planning services
+  // ros::ServiceServer RRT_srv_, octoRRT_srv_, PRM_srv_, graph_srv_, Astar_srv_;
+  // ros::ServiceServer newTraj_srv_;
 
-  // Marker publishers
-  ros::Publisher sentinel_pub_;
-  ros::Publisher obstacle_marker_pub_;
-  ros::Publisher free_space_marker_pub_;
-  ros::Publisher inflated_obstacle_marker_pub_;
-  ros::Publisher inflated_free_space_marker_pub_;
-  ros::Publisher path_marker_pub_;
-  ros::Publisher cam_frustum_pub_;
-  ros::Publisher map_keep_in_out_pub_;
+  // // Marker publishers
+  // ros::Publisher sentinel_pub_;
+  // ros::Publisher obstacle_marker_pub_;
+  // ros::Publisher free_space_marker_pub_;
+  // ros::Publisher inflated_obstacle_marker_pub_;
+  // ros::Publisher inflated_free_space_marker_pub_;
+  // ros::Publisher path_marker_pub_;
+  // ros::Publisher cam_frustum_pub_;
+  // ros::Publisher map_keep_in_out_pub_;
 };
 
 }  // namespace inspector

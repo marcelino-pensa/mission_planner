@@ -2,18 +2,25 @@
 
 	<arg name="namespace" default="Gazebo"/>
 
-	<node pkg="inspector"
-		type="inspector_node"
-		name="inspector_node"
-		ns="$(arg namespace)"
-		output="screen">
+    <group ns="$(arg namespace)">
+	    <node pkg="inspector" type="inspector_node" name="inspector_node" output="screen">
 
+	    	<!-- Namespace -->
+	    	<param name="namespace" value="$(arg namespace)"/>
 
+			<!-- Paths for waypoint files -->
+			<param name="localization_waypoints_path" value="$(find control_node)/waypoints/start2.wp"/>
+			<param name="inspection_waypoints_path" value="$(find control_node)/waypoints/topInspection.wp"/>
 
-		<!-- Paths for waypoint files -->
-		<param name="localization_waypoints_path" value="$(find control_node)/waypoints/start2.wp"/>
-		<param name="inspection_waypoints_path" value="$(find control_node)/waypoints/topInspection.wp"/>
+			<!-- Guidance parameters -->
+			<param name="takeoff_height" value="2.0"/> <!-- Takeoff height (in meters) -->
+			<param name="avg_velocity" value="0.5"/>   <!-- Average speed (in meters/sec) -->
 
-	</node>
+			<!-- Thread update rates (in Hz) -->
+			<param name="tf_update_rate" value="100"/>
+		</node>
+
+    	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" /> 
+    </group>
 
 </launch>

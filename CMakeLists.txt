@@ -8,11 +8,13 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+  tf
   mavros_msgs
   mg_msgs
   px4_control
-  roscpp
-  std_msgs
+  mav_trajectory_generation_ros
 ) 
 
 ###################################
@@ -50,8 +52,9 @@ add_executable(inspector_node
 target_link_libraries(inspector_node ${catkin_LIBRARIES})
 
 #This makes sure that messages and services are compiled before the rest
+add_dependencies(inspector_node mavros_msgs_generate_messages_cpp)
 add_dependencies(inspector_node mg_msgs_generate_messages_cpp)
 add_dependencies(inspector_node px4_control_generate_messages_cpp)
+add_dependencies(inspector_node mav_trajectory_generation_ros_generate_messages_cpp)
 add_dependencies(inspector_node ${catkin_EXPORTED_TARGETS})
-add_dependencies(inspector_node mavros_msgs_generate_messages_cpp)
 

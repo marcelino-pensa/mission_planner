@@ -55,6 +55,6 @@ target_link_libraries(inspector_node ${catkin_LIBRARIES})
 add_dependencies(inspector_node mavros_msgs_generate_messages_cpp)
 add_dependencies(inspector_node mg_msgs_generate_messages_cpp)
 add_dependencies(inspector_node px4_control_generate_messages_cpp)
-add_dependencies(inspector_node mav_trajectory_generation_ros_generate_messages_cpp)
+add_dependencies(inspector_node mav_trajectory_generation_ros_gencpp)
 add_dependencies(inspector_node ${catkin_EXPORTED_TARGETS})
 

@@ -20,7 +20,7 @@
 			<param name="tf_update_rate" value="100"/>
 		</node>
 
-    	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" /> 
+    	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" output="screen"/> 
     </group>
 
 </launch>

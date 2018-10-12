@@ -15,7 +15,9 @@ find_package(catkin REQUIRED COMPONENTS
   mg_msgs
   px4_control
   mav_trajectory_generation_ros
-) 
+)
+
+find_package(Eigen REQUIRED)
 
 ###################################
 ## catkin specific configuration ##
@@ -27,6 +29,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
+  DEPENDS Eigen
 #  INCLUDE_DIRS include
 #  LIBRARIES inspector
 #  CATKIN_DEPENDS mavros_msgs mg_msgs rocpp std_msgs

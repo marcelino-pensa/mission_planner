@@ -13,16 +13,25 @@
 #include <inspector/tf_class.h>
 
 // Msg/srv defined in other packages
-#include "mav_trajectory_generation_ros/minSnapStamped.h"
+#include "mg_msgs/minSnapStamped.h"
 
 // Msg/srv types
 #include "std_srvs/Trigger.h"
+
+// ROS Action types
+#include <actionlib/client/simple_action_client.h>
+#include <actionlib/client/terminal_state.h>
+#include <mg_msgs/follow_PVAJS_trajectoryAction.h>
 
 // C++ libraries
 #include <vector>
 #include <string>
 #include <thread>
 #include <fstream>
+#include <math.h>
+
+// Eigen-based libraries
+#include <Eigen/Dense>
 
 namespace inspector {
 
@@ -41,11 +50,33 @@ class InspectorClass {
   //                  const uint& cam_index);
 
   // Method for loading waypoints from file
-  bool LoadWaypoints(std::string &filename, 
+  bool LoadWaypoints(const std::string &filename, 
                      std::vector<xyz_heading> *waypoint_list);
 
   // Method for starting the quadcopter to listen to PVA messages
-  void SetQuadPosMode(std::string &ns, ros::NodeHandle *nh);
+  void SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh);
+
+  // Method for disarming the quad (stop motors)
+  void DisarmQuad(const std::string &ns, ros::NodeHandle *nh);
+
+  // Method for taking off when on the ground 
+  bool Takeoff(const std::string &ns, const double &height, const double &sampling_time, 
+               const double &avg_velocity, ros::NodeHandle *nh);
+
+  // Method for landing from a current location
+  bool Land(const std::string &ns, const double &land_height, const double &sampling_time,
+            const double &avg_velocity, ros::NodeHandle *nh);
+
+  // Method for getting a minimum snap trajectory between two points only
+  bool MinSnapPoint2Point(const std::string &ns, const Eigen::Vector3d &init_point,
+                          const Eigen::Vector3d &final_point, const double &yaw0, 
+                          const double &yaw_final, const double &tf, const double &sampling_time,
+                          ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
+
+  // Method for sending a PVAJS trajectory to the action server
+  bool CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_array &flatStates,
+                       const double &sampling_time, const bool &wait_until_done,
+                       ros::NodeHandle *nh);
 
   // // Callback for handling incoming new trajectory messages
   // void SegmentCallback(const mapper::Segment::ConstPtr &msg);
@@ -111,6 +142,9 @@ class InspectorClass {
   // // Subscriber variables
   // ros::Subscriber haz_sub_, perch_sub_, segment_sub_;
   // std::vector<ros::Subscriber> cameras_sub_;
+
+  // Action client
+  // actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> followPVAJS_action_client_("/follow_PVAJS_trajectory_action", true);
 
   // // Octomap services
   // ros::ServiceServer resolution_srv_, memory_time_srv_;

@@ -16,8 +16,8 @@
  * under the License.
  */
 
-#ifndef INSPECTOR_TF_CLASS_H_
-#define INSPECTOR_TF_CLASS_H_
+#ifndef MISSION_TF_CLASS_H_
+#define MISSION_TF_CLASS_H_
 
 #include <tf/transform_listener.h>
 #include <string>
@@ -83,4 +83,4 @@ class TfClass{
 
 }  // namespace tf_listener
 
-#endif  // INSPECTOR_TF_CLASS_H_
+#endif  // MISSION_TF_CLASS_H_

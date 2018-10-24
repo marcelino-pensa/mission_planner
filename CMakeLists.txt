@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(inspector)
+project(mission_planner)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -22,18 +22,8 @@ find_package(Eigen REQUIRED)
 ###################################
 ## catkin specific configuration ##
 ###################################
-## The catkin_package macro generates cmake config files for your package
-## Declare things to be passed to dependent projects
-## INCLUDE_DIRS: uncomment this if your package contains header files
-## LIBRARIES: libraries you create in this project that dependent projects also need
-## CATKIN_DEPENDS: catkin_packages dependent projects also need
-## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   DEPENDS Eigen
-#  INCLUDE_DIRS include
-#  LIBRARIES inspector
-#  CATKIN_DEPENDS mavros_msgs mg_msgs rocpp std_msgs
-#  DEPENDS system_lib
 )
 
 ###########
@@ -49,15 +39,19 @@ include_directories(
 )
 
 add_executable(inspector_node 
-               src/inspector_node.cpp
-               src/inspector_class.cpp
-               src/helper.cpp)
+               src/inspection_mission.cpp
+               src/mission_node.cpp
+               src/mission_class.cpp
+               src/helper.cpp
+               src/threads.cpp
+               src/callbacks.cpp)
 target_link_libraries(inspector_node ${catkin_LIBRARIES})
 
-#This makes sure that messages and services are compiled before the rest
-add_dependencies(inspector_node mavros_msgs_generate_messages_cpp)
-add_dependencies(inspector_node mg_msgs_generate_messages_cpp)
-add_dependencies(inspector_node px4_control_generate_messages_cpp)
-add_dependencies(inspector_node mav_trajectory_generation_ros_gencpp)
-add_dependencies(inspector_node ${catkin_EXPORTED_TARGETS})
+#This makes sure that necessary messages and services are compiled before this package
+add_dependencies(inspector_node mavros_msgs_generate_messages_cpp mg_msgs_generate_messages_cpp
+                                mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS})
+# add_dependencies(inspector_node mg_msgs_generate_messages_cpp)
+# add_dependencies(inspector_node mav_trajectory_generation_ros_gencpp)
+# add_dependencies(inspector_node ${catkin_EXPORTED_TARGETS})
+# add_dependencies(inspector_node px4_control_generate_messages_cpp)
 

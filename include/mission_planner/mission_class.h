@@ -1,19 +1,21 @@
 
 
-#ifndef MAPPER_MAPPER_CLASS_H_
-#define MAPPER_MAPPER_CLASS_H_
+#ifndef MISSION_CLASS_H_
+#define MISSION_CLASS_H_
 
 // Ros libraries
 #include <ros/ros.h>
 #include <tf/transform_listener.h>
 
 // Local defined libraries
-#include <inspector/structs.h>
-#include <inspector/helper.h>
-#include <inspector/tf_class.h>
+#include <mission_planner/structs.h>
+#include <mission_planner/helper.h>
+#include <mission_planner/tf_class.h>
 
 // Msg/srv defined in other packages
-#include "mg_msgs/minSnapStamped.h"
+#include "mg_msgs/minSnapWpStamped.h"
+#include "mg_msgs/minSnapWpPVAJ.h"
+#include "mg_msgs/PVAJ_request.h"
 
 // Msg/srv types
 #include "std_srvs/Trigger.h"
@@ -21,6 +23,7 @@
 // ROS Action types
 #include <actionlib/client/simple_action_client.h>
 #include <actionlib/client/terminal_state.h>
+#include <actionlib/client/simple_client_goal_state.h>
 #include <mg_msgs/follow_PVAJS_trajectoryAction.h>
 
 // C++ libraries
@@ -33,15 +36,16 @@
 // Eigen-based libraries
 #include <Eigen/Dense>
 
-namespace inspector {
+namespace mission_planner {
 
-class InspectorClass {
+class MissionClass {
  public:
-  InspectorClass();
-  ~InspectorClass();
+  MissionClass();
+  ~MissionClass();
 
-  // Constructor
-  virtual void Initialize(ros::NodeHandle *nh);
+  // Method for executing a mission. This is implemented in different files, and then
+  // the compiled one is executed
+  virtual void Mission(ros::NodeHandle *nh);
 
  protected:
   // Callbacks (see callbacks.cpp for implementation) ----------------
@@ -50,7 +54,8 @@ class InspectorClass {
   //                  const uint& cam_index);
 
   // Method for loading waypoints from file
-  bool LoadWaypoints(const std::string &filename, 
+  bool LoadWaypoints(const std::string &filename,
+                     const tf::StampedTransform &init_pose,
                      std::vector<xyz_heading> *waypoint_list);
 
   // Method for starting the quadcopter to listen to PVA messages
@@ -59,13 +64,34 @@ class InspectorClass {
   // Method for disarming the quad (stop motors)
   void DisarmQuad(const std::string &ns, ros::NodeHandle *nh);
 
-  // Method for taking off when on the ground 
-  bool Takeoff(const std::string &ns, const double &height, const double &sampling_time, 
-               const double &avg_velocity, ros::NodeHandle *nh);
+  // Helper function to add waypoints into the buffer
+  void AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints, const Eigen::Vector3d &init_vel,
+                           const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
+                           const double &sampling_time, xyz_heading *final_waypoint);
+
+  // Method for taking off when on the ground. Returns final position/heading
+  bool Takeoff(const std::string &ns, const double &takeoff_height, const double &sampling_time,
+               const double &avg_velocity, ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
 
   // Method for landing from a current location
   bool Land(const std::string &ns, const double &land_height, const double &sampling_time,
             const double &avg_velocity, ros::NodeHandle *nh);
+
+  // Method for landing from a current location (use px4_control autoland)
+  bool Land(const std::string &ns, ros::NodeHandle *nh);
+
+  // Method for going straight to a final point 
+  bool GoStraight2Point(const std::string &ns, const xyz_heading &destination, const double &sampling_time,
+                        const double &avg_velocity, ros::NodeHandle *nh);
+
+  // Method for executing waypoint navigation  (blocks execution of code until finished)
+  bool WaypointNavigation(const std::string &ns, const std::vector<xyz_heading> waypoints,
+                          const Eigen::Vector3d &init_vel, const Eigen::Vector3d &final_vel,
+                          const double &max_vel, const double &max_acc, const double &sampling_time,
+                          ros::NodeHandle *nh);
+
+  // Returns current pose of the vehicle - thread safe
+  tf::StampedTransform GetCurrentPose();
 
   // Method for getting a minimum snap trajectory between two points only
   bool MinSnapPoint2Point(const std::string &ns, const Eigen::Vector3d &init_point,
@@ -73,13 +99,34 @@ class InspectorClass {
                           const double &yaw_final, const double &tf, const double &sampling_time,
                           ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
 
+  // Different template for the function above
+  bool MinSnapPoint2Point(const std::string &ns, const xyz_heading &init_wp, 
+                          const xyz_heading &final_wp, const double &tf, 
+                          const double &sampling_time, ros::NodeHandle *nh,
+                          mg_msgs::PVAJS_array *flatStates);
+
+  // Method for getting minimum snap trajectories for multiple waypoints
+  bool MinSnapWaypointSet(const std::string &ns, const std::vector<xyz_heading> waypoints,
+                          const Eigen::Vector3d &init_vel, const Eigen::Vector3d &final_vel,
+                          const double &max_vel, const double &max_acc, const double &sampling_time,
+                          ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
+  // Different template for the function above
+  bool MinSnapWaypointSet(const std::string &ns, const minSnapWpInputs &Inputs,
+                          ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
+
   // Method for sending a PVAJS trajectory to the action server
   bool CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_array &flatStates,
                        const double &sampling_time, const bool &wait_until_done,
                        ros::NodeHandle *nh);
 
-  // // Callback for handling incoming new trajectory messages
-  // void SegmentCallback(const mapper::Segment::ConstPtr &msg);
+  // Similar to construction above, but the client is declared outside the function
+  bool CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_array &flatStates,
+                       const double &sampling_time, const bool &wait_until_done,
+                       ros::NodeHandle *nh,
+                       actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client);
+
+  // Callbacks -----------------------------------------------------------------
+  void ActionGoalStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr &msg);
 
 
   // // Services (see services.cpp for implementation) -----------------
@@ -103,8 +150,16 @@ class InspectorClass {
   // // Thread for fading memory of the octomap
   // void FadeTask();
 
-  // // Threads for constantly updating the tfTree values
+  // Threads for constantly updating the tfTree values
   void TfTask();
+
+  // Thread that reads waypoints from a buffer to solve minimum snap problems
+  void MinSnapSolverTask(const std::string &ns);
+
+  // Consumer thread
+  // Consumes minimum snap trajectories (sends to action server)
+  void TrajectoryActionCaller(const std::string &ns);
+
   // void PerchTfTask();
   // void BodyTfTask();
   // void TfTask(const std::string& parent_frame,
@@ -129,22 +184,14 @@ class InspectorClass {
   // Namespace of the current node
   std::string ns_;
 
-  // List of waypoints
+  // List of waypoints for inspection and localization procedures
   std::vector<xyz_heading> localization_waypoint_list_, inspection_waypoint_list_;
 
   // Thread variables
-  std::thread h_tf_thread_;
-  // std::thread h_haz_tf_thread_, h_perch_tf_thread_, h_body_tf_thread_;
-  // std::thread h_octo_thread_, h_fade_thread_, h_collision_check_thread_;
-  // std::thread h_keyboard_thread_;
-  // std::vector<std::thread> h_cameras_tf_thread_;
+  std::thread h_tf_thread_, h_min_snap_thread_, h_trajectory_caller_thread_;
 
-  // // Subscriber variables
-  // ros::Subscriber haz_sub_, perch_sub_, segment_sub_;
-  // std::vector<ros::Subscriber> cameras_sub_;
-
-  // Action client
-  // actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> followPVAJS_action_client_("/follow_PVAJS_trajectory_action", true);
+  // Subscriber variables
+  ros::Subscriber action_status_sub_;
 
   // // Octomap services
   // ros::ServiceServer resolution_srv_, memory_time_srv_;
@@ -152,6 +199,9 @@ class InspectorClass {
 
   // Thread rates (hz)
   double tf_update_rate_;
+
+  // Navigation parameters
+  double avg_velocity_;
 
   // // Path planning services
   // ros::ServiceServer RRT_srv_, octoRRT_srv_, PRM_srv_, graph_srv_, Astar_srv_;
@@ -168,6 +218,6 @@ class InspectorClass {
   // ros::Publisher map_keep_in_out_pub_;
 };
 
-}  // namespace inspector
+}  // namespace mission_planner
 
-#endif  // MAPPER_MAPPER_CLASS_H_
+#endif  // MISSION_CLASS_H_

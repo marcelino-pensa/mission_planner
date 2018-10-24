@@ -13,7 +13,7 @@
 			<param name="inspection_waypoints_path" value="$(find control_node)/waypoints/topInspection.wp"/>
 
 			<!-- Guidance parameters -->
-			<param name="takeoff_height" value="2.0"/> <!-- Takeoff height (in meters) -->
+			<param name="takeoff_height" value="3.0"/> <!-- Takeoff height (in meters) -->
 			<param name="avg_velocity" value="0.5"/>   <!-- Average speed (in meters/sec) -->
 
 			<!-- Thread update rates (in Hz) -->
@@ -22,5 +22,9 @@
 
     	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" output="screen"/> 
     </group>
+
+    <include file="$(find mapper)/launch/mapper_ns.launch">
+		<arg name="namespace" value="$(arg namespace)" />
+	</include>
 
 </launch>

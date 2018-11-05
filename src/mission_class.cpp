@@ -5,8 +5,9 @@
 // ---------------------------------------------------
 namespace mission_planner {
 
-MissionClass::MissionClass() {
-
+MissionClass::MissionClass(const std::string &ns, const double &tf_update_rate,
+                           const double &max_velocity) {
+    this->Initialize(ns, tf_update_rate, max_velocity);
 }
 
 MissionClass::~MissionClass() {
@@ -16,39 +17,16 @@ MissionClass::~MissionClass() {
     h_trajectory_caller_thread_.join();
 }
 
+void MissionClass::Initialize(const std::string &ns, const double &tf_update_rate,
+                              const double &max_velocity) {
+    ns_ = ns;
+    tf_update_rate_ = tf_update_rate;
+    max_velocity_ = max_velocity;
 
-bool MissionClass::LoadWaypoints(const std::string &filename,
-                                 const tf::StampedTransform &init_pose,
-                                 std::vector<xyz_heading> *waypoint_list) {
-    ROS_INFO("[mission_node] Opening waypoints file: \n%s\n", filename.c_str());
-    std::ifstream myfile(filename.c_str());
-    float x, y, z, yaw;
-    double init_roll, init_pitch, init_yaw;
-    init_pose.getBasis().getRPY(init_roll, init_pitch, init_yaw);
-    // ROS_INFO("Init yaw: %f", init_yaw);
-
-
-    // Check whether file could be opened (path might be wrong)
-    if (myfile.is_open()) {
-        // Observation: for some reason Eric defined yaw using a NED frame, while xyz in ENU frame
-        // Observation2: waypoints are in relation with initial position
-        while( myfile >> x >> y >> z >> yaw) {
-            waypoint_list->push_back(xyz_heading(x, y, z, init_yaw+helper::deg2rad(yaw)));
-            // std::cout << x << " " << y << " " << z << " " << init_yaw-yaw << std::endl;
-        }
-        myfile.close();
-
-        // Check if any waypoint was loaded
-        if(waypoint_list->size() > 0) {
-            return 1;
-        } else {
-            ROS_ERROR("[mission_node] No waypoints within the file: %s", filename.c_str());
-            return 0;
-        }
-    } else {
-        ROS_ERROR("[mission_node] Unable to open file in %s", filename.c_str());
-        return 0;
-    }
+    // Start threads --------------------------------------------------------------
+    h_tf_thread_ = std::thread(&MissionClass::TfTask, this);
+    h_min_snap_thread_ = std::thread(&MissionClass::MinSnapSolverTask, this, ns_);
+    h_trajectory_caller_thread_ = std::thread(&MissionClass::TrajectoryActionCaller, this, ns_);
 }
 
 void MissionClass::SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh) {
@@ -197,7 +175,7 @@ bool MissionClass::Land(const std::string &ns, ros::NodeHandle *nh) {
 
 // Method for going straight to a final point 
 bool MissionClass::GoStraight2Point(const std::string &ns, const xyz_heading &destination, const double &sampling_time,
-                                    const double &avg_velocity, ros::NodeHandle *nh) {
+                                    const double &max_velocity, ros::NodeHandle *nh) {
     // Get current pose
     tf_listener::TfClass tf_initial_pose;
     mutexes_.tf.lock();
@@ -210,7 +188,7 @@ bool MissionClass::GoStraight2Point(const std::string &ns, const xyz_heading &de
     Eigen::Vector3d init_pos = helper::rostfvec2eigenvec(tf_initial_pose.transform_.getOrigin());
     Eigen::Vector3d final_pos = destination.GetEigenXYZ();
     double yaw_final = destination.GetYaw();
-    double tf = 2.0*(final_pos - init_pos).norm()/avg_velocity;
+    double tf = 2.0*(final_pos - init_pos).norm()/max_velocity;
 
     // Get smooth trajectory for take-off
     mission_planner::TrajectoryActionInputs traj_inputs;
@@ -253,6 +231,19 @@ tf::StampedTransform MissionClass::GetCurrentPose() {
         transform = globals_.tf_quad2world;
     mutexes_.tf.unlock();
     return transform;
+}
+
+// Wait until the first pose is obtained
+tf::StampedTransform MissionClass::WaitForFirstPose() {
+    tf::StampedTransform tf_initial_pose;
+    ros::Rate loop_rate(10);
+    do {
+        loop_rate.sleep();
+        mutexes_.tf.lock();
+            tf_initial_pose = globals_.tf_quad2world;
+        mutexes_.tf.unlock();
+    } while (tf_initial_pose.stamp_.toSec() <= 0.0);
+    return tf_initial_pose;
 }
 
 bool MissionClass::MinSnapPoint2Point(const std::string &ns, const Eigen::Vector3d &init_point, 
@@ -404,6 +395,36 @@ bool MissionClass::MinSnapWaypointSet(const std::string &ns, const minSnapWpInpu
                              nh, flatStates);
 }
 
+void MissionClass::CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
+                                  const bool &wait_until_done, ros::NodeHandle *nh,
+                                  actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client) {
+    // If halt, remove all trajectories from list and stop action
+    if(traj_inputs.action_type == ActionType::Halt) {
+        // Remove all trajectories from list
+        mutexes_.trajectory_buffer.lock();
+            while(globals_.traj_inputs.size() > 0) {
+                globals_.traj_inputs.pop_front();
+            }
+        mutexes_.trajectory_buffer.unlock();
+    } else if (traj_inputs.action_type == ActionType::Disarm) {
+        this->DisarmQuad(ns_, nh);
+
+        // Remove all trajectories from list
+        mutexes_.trajectory_buffer.lock();
+            while(globals_.traj_inputs.size() > 0) {
+                globals_.traj_inputs.pop_front();
+            }
+        mutexes_.trajectory_buffer.unlock();
+    } else if (traj_inputs.action_type == ActionType::Trajectory) {
+        this->CallPVAJSAction(ns, traj_inputs.flatStates, traj_inputs.sampling_time, 
+                              wait_until_done, nh, client);
+        
+        // Remove trajectory from list
+        mutexes_.trajectory_buffer.lock();
+            globals_.traj_inputs.pop_front();
+        mutexes_.trajectory_buffer.unlock();
+    }
+}
 
 
 bool MissionClass::CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_array &flatStates,

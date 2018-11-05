@@ -31,6 +31,12 @@ geometry_msgs::Quaternion set_quat(const double &roll, const double &pitch, cons
 
 geometry_msgs::Quaternion set_quat(const double &w, const double &x, const double &y, const double &z);
 
+Eigen::Vector3d quat2rpy(geometry_msgs::Quaternion quat);
+
+double getHeadingFromQuat(geometry_msgs::Quaternion quat);
+
+double getHeadingFromTransform(tf::StampedTransform transform);
+
 mg_msgs::PVAJ_request get_empty_PVAJ();
 
 std::vector<std::pair<uint, uint>> split_waypoints(const uint &n_waypoints,

@@ -40,23 +40,14 @@ namespace mission_planner {
 
 class MissionClass {
  public:
-  MissionClass();
+  MissionClass() {};
+  MissionClass(const std::string &ns, const double &tf_update_rate,
+               const double &max_velocity);
   ~MissionClass();
 
-  // Method for executing a mission. This is implemented in different files, and then
-  // the compiled one is executed
-  virtual void Mission(ros::NodeHandle *nh);
-
- protected:
-  // Callbacks (see callbacks.cpp for implementation) ----------------
-  // Callback for handling incoming point cloud messages
-  // void PclCallback(const sensor_msgs::PointCloud2::ConstPtr &msg,
-  //                  const uint& cam_index);
-
-  // Method for loading waypoints from file
-  bool LoadWaypoints(const std::string &filename,
-                     const tf::StampedTransform &init_pose,
-                     std::vector<xyz_heading> *waypoint_list);
+  //Methods -------------------------------------------------------
+  void Initialize(const std::string &ns, const double &tf_update_rate,
+                  const double &max_velocity);
 
   // Method for starting the quadcopter to listen to PVA messages
   void SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh);
@@ -82,7 +73,7 @@ class MissionClass {
 
   // Method for going straight to a final point 
   bool GoStraight2Point(const std::string &ns, const xyz_heading &destination, const double &sampling_time,
-                        const double &avg_velocity, ros::NodeHandle *nh);
+                        const double &max_velocity, ros::NodeHandle *nh);
 
   // Method for executing waypoint navigation  (blocks execution of code until finished)
   bool WaypointNavigation(const std::string &ns, const std::vector<xyz_heading> waypoints,
@@ -92,6 +83,9 @@ class MissionClass {
 
   // Returns current pose of the vehicle - thread safe
   tf::StampedTransform GetCurrentPose();
+
+  // Wait until the first pose is obtained
+  tf::StampedTransform WaitForFirstPose();
 
   // Method for getting a minimum snap trajectory between two points only
   bool MinSnapPoint2Point(const std::string &ns, const Eigen::Vector3d &init_point,
@@ -114,6 +108,11 @@ class MissionClass {
   bool MinSnapWaypointSet(const std::string &ns, const minSnapWpInputs &Inputs,
                           ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
 
+  // Calls different action types (Halt, disarm, PVAJS trajectory)
+  void CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
+                      const bool &wait_until_done, ros::NodeHandle *nh,
+                      actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client);
+
   // Method for sending a PVAJS trajectory to the action server
   bool CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_array &flatStates,
                        const double &sampling_time, const bool &wait_until_done,
@@ -125,31 +124,10 @@ class MissionClass {
                        ros::NodeHandle *nh,
                        actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client);
 
-  // Callbacks -----------------------------------------------------------------
+  // Callbacks (see services.cpp for implementation) ------------------------------
   void ActionGoalStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr &msg);
 
-
-  // // Services (see services.cpp for implementation) -----------------
-  // // Update resolution of the map
-  // bool UpdateResolution(mapper::SetFloat::Request &req,
-  //                       mapper::SetFloat::Response &res);
-
-  // // Update map memory time
-  // bool UpdateMemoryTime(mapper::SetFloat::Request &req,
-  //                       mapper::SetFloat::Response &res);
-
-  // // Update map inflation
-  // bool MapInflation(mapper::SetFloat::Request &req,
-  //                   mapper::SetFloat::Response &res);
-
-  // // Reset the map
-  // bool ResetMap(std_srvs::Trigger::Request &req,
-  //               std_srvs::Trigger::Response &res);
-
-  // // Threads (see threads.cpp for implementation) -----------------
-  // // Thread for fading memory of the octomap
-  // void FadeTask();
-
+ protected:
   // Threads for constantly updating the tfTree values
   void TfTask();
 
@@ -160,32 +138,14 @@ class MissionClass {
   // Consumes minimum snap trajectories (sends to action server)
   void TrajectoryActionCaller(const std::string &ns);
 
-  // void PerchTfTask();
-  // void BodyTfTask();
-  // void TfTask(const std::string& parent_frame,
-  //             const std::string& child_frame,
-  //             const uint& index); // Returns the transform from child to parent frame, expressed in parent frame
-
-  // // Thread for collision checking
-  // void CollisionCheckTask();
-
-  // // Thread for getting pcl data and populating the octomap
-  // void OctomappingTask();
-
-  // // Thread for getting keyboard messages
-  // void KeyboardTask();
 
  private:
   // Declare global variables (structures defined in structs.h)
   globalVariables globals_;  // These variables are all mutex-protected
   mutexStruct mutexes_;
-  // semaphoreStruct semaphores_;
 
   // Namespace of the current node
   std::string ns_;
-
-  // List of waypoints for inspection and localization procedures
-  std::vector<xyz_heading> localization_waypoint_list_, inspection_waypoint_list_;
 
   // Thread variables
   std::thread h_tf_thread_, h_min_snap_thread_, h_trajectory_caller_thread_;
@@ -193,29 +153,12 @@ class MissionClass {
   // Subscriber variables
   ros::Subscriber action_status_sub_;
 
-  // // Octomap services
-  // ros::ServiceServer resolution_srv_, memory_time_srv_;
-  // ros::ServiceServer map_inflation_srv_, reset_map_srv_;
-
   // Thread rates (hz)
   double tf_update_rate_;
 
   // Navigation parameters
-  double avg_velocity_;
+  double max_velocity_;
 
-  // // Path planning services
-  // ros::ServiceServer RRT_srv_, octoRRT_srv_, PRM_srv_, graph_srv_, Astar_srv_;
-  // ros::ServiceServer newTraj_srv_;
-
-  // // Marker publishers
-  // ros::Publisher sentinel_pub_;
-  // ros::Publisher obstacle_marker_pub_;
-  // ros::Publisher free_space_marker_pub_;
-  // ros::Publisher inflated_obstacle_marker_pub_;
-  // ros::Publisher inflated_free_space_marker_pub_;
-  // ros::Publisher path_marker_pub_;
-  // ros::Publisher cam_frustum_pub_;
-  // ros::Publisher map_keep_in_out_pub_;
 };
 
 }  // namespace mission_planner

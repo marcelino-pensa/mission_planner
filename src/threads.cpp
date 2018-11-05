@@ -37,7 +37,7 @@ void MissionClass::MinSnapSolverTask(const std::string &ns) {
     mission_planner::minSnapWpInputs min_snap_input;
 
     // Load desired average velocity
-    double avg_velocity = avg_velocity_;
+    double max_vel = max_velocity_;
 
     while (ros::ok()) {
         // See if there is anything in the buffer
@@ -61,7 +61,7 @@ void MissionClass::MinSnapSolverTask(const std::string &ns) {
         } else if(min_snap_input.waypoints_.size() == 2) {
             double distance = 
                 min_snap_input.waypoints_[0].GetXYZDist(min_snap_input.waypoints_[1]);
-            double tf = 2.0*distance/avg_velocity;
+            double tf = 2.0*distance/max_vel;
             this->MinSnapPoint2Point(ns, min_snap_input.waypoints_[0],
                           min_snap_input.waypoints_[1], tf, 
                           min_snap_input.sampling_time_, &nh, &traj_inputs.flatStates);
@@ -70,6 +70,7 @@ void MissionClass::MinSnapSolverTask(const std::string &ns) {
         }
         traj_inputs.start_immediately = false;
         traj_inputs.sampling_time = min_snap_input.sampling_time_;
+        traj_inputs.action_type = ActionType::Trajectory;
 
         mutexes_.trajectory_buffer.lock();
             globals_.traj_inputs.push_back(traj_inputs);
@@ -116,52 +117,28 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
             continue;
         }
 
-  //       // Check whether the action server is currently busy
-		// mutexes_.action_server_status.lock();
-		// 	actionlib_msgs::GoalStatusArray current_status = globals_.action_server_status;
-		// mutexes_.action_server_status.unlock();
-		// action_server_busy = false;
-		// for (uint i = 0; i < current_status.status_list.size(); i++) {
-		// 	if (current_status.status_list[i].status == current_status.status_list[i].ACTIVE) {
-		// 		action_server_busy = true;
-		// 	}
-		// }
-
-
         // Get current state of the action server
-		actionlib::SimpleClientGoalState status = followPVAJS_action_client.getState();
-		if (status.state_ == status.ACTIVE) {
-			action_server_busy = true;
-		} else {
-			action_server_busy = false;
-		}
-
-		// Send data to action server (start immediately or wait until server is no longer active)
-        if (local_traj_inputs.start_immediately) {
-        	// Start immediately is usually triggered when unsafe behaviour is detected
-        	followPVAJS_action_client.cancelAllGoals();
-        	this->CallPVAJSAction(ns, local_traj_inputs.flatStates,
-                       local_traj_inputs.sampling_time, wait_until_done, 
-                       &nh, &followPVAJS_action_client);
-        	
-        	// Remove trajectory from list
-        	mutexes_.trajectory_buffer.lock();
-        		globals_.traj_inputs.pop_front();
-        	mutexes_.trajectory_buffer.unlock();
+        actionlib::SimpleClientGoalState status = followPVAJS_action_client.getState();
+        if (status.state_ == status.ACTIVE) {
+            action_server_busy = true;
         } else {
-        	if(!action_server_busy) {
-        		// Start only when server is no longer busy
-	        	this->CallPVAJSAction(ns, local_traj_inputs.flatStates,
-	                       local_traj_inputs.sampling_time, wait_until_done,
-	                       &nh, &followPVAJS_action_client);
-
-	        	// Remove trajectory from list
-	        	mutexes_.trajectory_buffer.lock();
-	        		globals_.traj_inputs.pop_front();
-	        	mutexes_.trajectory_buffer.unlock();
-        	}
+            action_server_busy = false;
         }
 
+        // Send data to action server (start immediately or wait until server is no longer active)
+        if (local_traj_inputs.start_immediately) {
+            // Start immediately is usually triggered when unsafe behaviour is detected
+            followPVAJS_action_client.cancelAllGoals();
+            this->CallActionType(ns, local_traj_inputs, wait_until_done, 
+                                 &nh, &followPVAJS_action_client);
+
+        } else {
+            if(!action_server_busy) {
+                // Start only when server is no longer busy
+                this->CallActionType(ns, local_traj_inputs, wait_until_done, 
+                                 &nh, &followPVAJS_action_client);
+            }
+        }
 
         loop_rate.sleep();
     }

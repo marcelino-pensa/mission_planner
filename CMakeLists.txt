@@ -39,7 +39,7 @@ include_directories(
 )
 
 add_executable(inspector_node 
-               src/inspection_mission.cpp
+               src/inspection_class.cpp
                src/mission_node.cpp
                src/mission_class.cpp
                src/helper.cpp

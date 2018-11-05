@@ -52,6 +52,34 @@ geometry_msgs::Quaternion set_quat(const double &w, const double &x, const doubl
 	return quat;
 }
 
+Eigen::Vector3d quat2rpy(geometry_msgs::Quaternion quat) {
+	double qx, qy, qz, qw, roll, pitch, yaw;
+	qx = quat.x;
+	qy = quat.y;
+	qz = quat.z;
+	qw = quat.w;
+
+	//Formulas for roll, pitch, yaw
+	roll = atan2(2*(qw*qx + qy*qz) , 1 - 2*(qx*qx + qy*qy) );
+	pitch = asin(2*(qw*qy - qz*qx));
+	yaw = atan2(2*(qw*qz + qx*qy),1 - 2*(qy*qy + qz*qz) );
+
+	Eigen::Vector3d rpy(roll, pitch, yaw);
+	return rpy;
+}
+
+double getHeadingFromQuat(geometry_msgs::Quaternion quat) {
+	Eigen::Vector3d RPY = quat2rpy(quat);
+	return RPY[2];
+}
+
+double getHeadingFromTransform(tf::StampedTransform transform) {
+	double roll, pitch, yaw;
+	transform.getBasis().getRPY(roll, pitch, yaw);
+	return yaw;
+}
+
+
 mg_msgs::PVAJ_request get_empty_PVAJ() {
 	mg_msgs::PVAJ_request PVAJ;
 	PVAJ.use_pos = false;

@@ -2,7 +2,7 @@
 
 // Standard includes
 #include <ros/ros.h>
-#include <mission_planner/mission_class.h>
+#include <mission_planner/inspection_class.h>
 
 int main(int argc, char **argv) {
 
@@ -11,7 +11,7 @@ int main(int argc, char **argv) {
 	ros::init(argc, argv, "mission_node");
 	ros::NodeHandle node("~");
 	
-	mission_planner::MissionClass mission_obj;
+	inspector::InspectorClass mission_obj;
 	mission_obj.Mission(&node);
 
 	ros::spin();

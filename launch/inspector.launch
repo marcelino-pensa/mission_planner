@@ -3,7 +3,7 @@
 	<arg name="namespace" default="Gazebo"/>
 
     <group ns="$(arg namespace)">
-	    <node pkg="inspector" type="inspector_node" name="inspector_node" output="screen">
+	    <node pkg="mission_planner" type="inspector_node" name="inspector_node" output="screen">
 
 	    	<!-- Namespace -->
 	    	<param name="namespace" value="$(arg namespace)"/>
@@ -14,16 +14,21 @@
 
 			<!-- Guidance parameters -->
 			<param name="takeoff_height" value="3.0"/> <!-- Takeoff height (in meters) -->
-			<param name="avg_velocity" value="0.5"/>   <!-- Average speed (in meters/sec) -->
+			<param name="max_velocity" value="0.5"/>   <!-- Maximum speed (in meters/sec) -->
 
 			<!-- Thread update rates (in Hz) -->
 			<param name="tf_update_rate" value="100"/>
 		</node>
 
     	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" output="screen"/> 
+
     </group>
 
     <include file="$(find mapper)/launch/mapper_ns.launch">
+		<arg name="namespace" value="$(arg namespace)" />
+	</include>
+
+	<include file="$(find simulations_ros)/launch/kinectMapping.launch"> 
 		<arg name="namespace" value="$(arg namespace)" />
 	</include>
 

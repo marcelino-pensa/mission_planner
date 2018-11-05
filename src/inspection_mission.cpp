@@ -1,6 +1,7 @@
 
 #include <mission_planner/mission_class.h>
 
+
 // ---------------------------------------------------
 namespace mission_planner {
 	
@@ -49,6 +50,19 @@ void MissionClass::Mission(ros::NodeHandle *nh) {
                  static_cast<int>(inspection_waypoint_list_.size()) );
     }
 
+    // // Publish inspection points in Rviz
+    // visualization_msgs::MarkerArray marker_array;
+    // drawWaypoints(inspection_waypoint_list_, "map", &marker_array);
+    // ros::Publisher wpMarker_pub = nh->advertise<visualization_msgs::MarkerArray>
+    //                                 ("waypoint_visualization_markers", 1000);
+    // ros::Rate loop_rate2(1);
+    // for(uint i = 0; i < 20; i++) {
+    //     wpMarker_pub.publish(marker_array);
+    //     loop_rate2.sleep();
+    // }
+    
+
+
     // Load inspection file
     if(!LoadWaypoints(localization_file, tf_initial_pose, &localization_waypoint_list_)) {
         return;
@@ -61,7 +75,7 @@ void MissionClass::Mission(ros::NodeHandle *nh) {
     // We divide the waypoints into subset of waypoints, which can be solved quickly.
     // In addition, a sequence of waypoints can be calculated while a trajectory is being executed.
     std::vector<std::pair<uint, uint>> segments;
-    uint wp_per_segment = 25;
+    uint wp_per_segment = 50;
     segments = helper::split_waypoints(inspection_waypoint_list_.size(), wp_per_segment);
 
     // Variable for setting waypoints
@@ -91,19 +105,19 @@ void MissionClass::Mission(ros::NodeHandle *nh) {
         this->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
     }
 
+    ros::Duration(200.0).sleep();
+
     // Go to origin
     waypoints.clear();
     waypoints.push_back(final_waypoint);
     waypoints.push_back(xyz_heading(0.0, 0.0, final_waypoint.z_, 0.0));
+    this->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
 
     // Land
     waypoints.clear();
     waypoints.push_back(final_waypoint);
     waypoints.push_back(xyz_heading(final_waypoint.x_, final_waypoint.y_, 0.0, final_waypoint.yaw_));
     this->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
-
-// // GoStraight2Point(const std::string &ns, const xyz_heading &destination, const double &sampling_time,
-// //                                       const double &avg_velocity, ros::NodeHandle *nh)
 
 //     // // Run through a few waypoints
 //     // double min_dist = 1.0;
@@ -126,17 +140,6 @@ void MissionClass::Mission(ros::NodeHandle *nh) {
 //     //     }
 //     // }
     
-
-    // minSnapWpInputs waypoint_set2(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time);
-    // globals_.min_snap_inputs.push(waypoint_set2);
-    // this->WaypointNavigation(ns_, waypoints, init_vel, final_vel, max_vel, max_acc, 
-    //                          sampling_time, nh);
-
-
-
-    // Land
-    // this->Land(ns_, nh);
-
     // // Disarm quad
     // this->DisarmQuad(ns_, nh);
 

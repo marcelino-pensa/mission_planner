@@ -55,6 +55,9 @@ struct globalVariables {
 
 	// Buffer for sending trajectories to the quad
 	std::list<TrajectoryActionInputs> traj_inputs;
+
+	// Flag to determine whether quad is busy with some action
+  	bool quad_is_busy;
 };
 
 struct mutexStruct {
@@ -62,6 +65,7 @@ struct mutexStruct {
     std::mutex action_server_status;
     std::mutex waypoint_buffer;
     std::mutex trajectory_buffer;
+    std::mutex quad_is_busy;
 };
 
 

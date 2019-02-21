@@ -38,6 +38,7 @@ include_directories(
   ${Eigen_INCLUDE_DIRS}
 )
 
+# Simulation inspection node
 add_executable(inspector_node 
                src/inspection_class.cpp
                src/mission_node.cpp
@@ -46,12 +47,20 @@ add_executable(inspector_node
                src/threads.cpp
                src/callbacks.cpp)
 target_link_libraries(inspector_node ${catkin_LIBRARIES})
-
-#This makes sure that necessary messages and services are compiled before this package
 add_dependencies(inspector_node mavros_msgs_generate_messages_cpp mg_msgs_generate_messages_cpp
                                 mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS})
-# add_dependencies(inspector_node mg_msgs_generate_messages_cpp)
-# add_dependencies(inspector_node mav_trajectory_generation_ros_gencpp)
-# add_dependencies(inspector_node ${catkin_EXPORTED_TARGETS})
-# add_dependencies(inspector_node px4_control_generate_messages_cpp)
+
+# Rover inspection node
+add_executable(vicon_rover_inspection 
+               src/vicon_rover_inspection.cpp
+               src/mission_node.cpp
+               src/mission_class.cpp
+               src/helper.cpp
+               src/threads.cpp
+               src/callbacks.cpp
+               src/msg_conversions.cpp
+               src/visualization_functions.cpp)
+target_link_libraries(vicon_rover_inspection ${catkin_LIBRARIES})
+add_dependencies(vicon_rover_inspection mavros_msgs_generate_messages_cpp mg_msgs_generate_messages_cpp
+                                mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS})
 

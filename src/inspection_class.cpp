@@ -49,8 +49,8 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     mission_.Initialize(ns_, tf_update_rate, max_velocity_);
 
     // Start subscribers ----------------------------------------------------------
-    ros::Subscriber localization = nh->subscribe
-                ("/rtabmap/localization_pose", 1, &InspectorClass::LocalizationCallback,this);
+    ros::Subscriber localization = nh->subscribe("/" + ns_ + "/rtabmap/localization_pose", 
+                                                 1, &InspectorClass::LocalizationCallback,this);
     // std::string topic_name = "/" + ns_ + "/follow_PVAJS_trajectory_action/status";
     // action_status_sub_ = nh->subscribe(topic_name, 10, &MissionClass::ActionGoalStatusCallback, this);
 

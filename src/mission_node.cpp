@@ -2,7 +2,7 @@
 
 // Standard includes
 #include <ros/ros.h>
-#include <mission_planner/inspection_class.h>
+#include <mission_planner/vicon_rover_inspection.h>
 
 int main(int argc, char **argv) {
 

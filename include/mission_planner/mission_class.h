@@ -124,6 +124,12 @@ class MissionClass {
                        ros::NodeHandle *nh,
                        actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client);
 
+  // Returns whether quad is idle (not performing any actions)
+  bool IsQuadIdle();
+
+  // Blocking function that returns when quad is idle
+  void ReturnWhenIdle();
+
   // Callbacks (see services.cpp for implementation) ------------------------------
   void ActionGoalStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr &msg);
 

@@ -463,4 +463,34 @@ bool MissionClass::CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_a
     return true;
 }
 
+bool MissionClass::IsQuadIdle() {
+    mutexes_.waypoint_buffer.lock();
+        uint wp_buffer_size = globals_.min_snap_inputs.size();
+    mutexes_.waypoint_buffer.unlock();
+
+    mutexes_.trajectory_buffer.lock();
+        uint traj_buffer_size = globals_.traj_inputs.size();
+    mutexes_.trajectory_buffer.unlock();
+
+    mutexes_.quad_is_busy.lock();
+        bool quad_is_busy = globals_.quad_is_busy;
+    mutexes_.quad_is_busy.unlock();
+
+    // ROS_INFO("%d\t%d\t%d", (wp_buffer_size > 0), (traj_buffer_size > 0), quad_is_busy);
+
+    if ((wp_buffer_size > 0) || (traj_buffer_size > 0) || quad_is_busy) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+
+void MissionClass::ReturnWhenIdle() {
+    ros::Rate loop_rate(10); // Check if its idle at 10hz
+    while(!this->IsQuadIdle()) {
+        loop_rate.sleep();
+    }
+}
+
 } // namespace mission_planner

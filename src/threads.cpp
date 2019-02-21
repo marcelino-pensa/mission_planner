@@ -98,6 +98,10 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
     std::list<TrajectoryActionInputs> traj_inputs;
     TrajectoryActionInputs local_traj_inputs;
 
+    mutexes_.quad_is_busy.lock();
+        globals_.quad_is_busy = false;
+    mutexes_.quad_is_busy.unlock();
+
     // Create action handle
     std::string action_name = "/" + ns + "/follow_PVAJS_trajectory_action";
     actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> 
@@ -109,20 +113,25 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
         	traj_inputs = globals_.traj_inputs;
         mutexes_.trajectory_buffer.unlock();
 
-        if(traj_inputs.size() > 0) {
-        	// Retrieve first item in the buffer
-            local_traj_inputs = traj_inputs.front();
-        } else {
-            loop_rate.sleep();
-            continue;
-        }
-
         // Get current state of the action server
         actionlib::SimpleClientGoalState status = followPVAJS_action_client.getState();
         if (status.state_ == status.ACTIVE) {
             action_server_busy = true;
         } else {
             action_server_busy = false;
+        }
+
+        // Set global variable of whether server is busy or not
+        mutexes_.quad_is_busy.lock();
+            globals_.quad_is_busy = action_server_busy;
+        mutexes_.quad_is_busy.unlock();
+
+        if(traj_inputs.size() > 0) {
+        	// Retrieve first item in the buffer
+            local_traj_inputs = traj_inputs.front();
+        } else {
+            loop_rate.sleep();
+            continue;
         }
 
         // Send data to action server (start immediately or wait until server is no longer active)
@@ -134,7 +143,10 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
 
         } else {
             if(!action_server_busy) {
-                // Start only when server is no longer busy
+                mutexes_.quad_is_busy.lock();
+                    globals_.quad_is_busy = true;
+                mutexes_.quad_is_busy.unlock();
+                // Start only when server is no longer busy (also removes new trajectory from buffer)
                 this->CallActionType(ns, local_traj_inputs, wait_until_done, 
                                  &nh, &followPVAJS_action_client);
             }

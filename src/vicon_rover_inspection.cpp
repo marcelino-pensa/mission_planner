@@ -61,9 +61,23 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     mission_.ReturnWhenIdle();
     ROS_INFO("[mission_node] Quad is idle!");
 
+    // Start service for collecting yolo data for triangulation
+    std::string start_triangulation_srv_name = "/" + ns_ + "/triangulation/collect_yolo_data";
+    triangulation_start_client_ = nh_.serviceClient<mg_msgs::set_strings>(start_triangulation_srv_name);
+    mg_msgs::set_strings yolo_client_msg;
+    yolo_client_msg.request.strings.push_back("like_a_boss");
+    yolo_client_msg.request.strings.push_back("surprised");
+    ROS_INFO("Calling service '%s' for batch solution!", triangulation_start_client_.getService().c_str());
+    if (triangulation_start_client_.call(yolo_client_msg)) {
+        ROS_INFO("[mission_node] Triangulation service returned successfully!");
+    } else {
+        ROS_WARN("[mission_node] Error calling triangulation service. Aborting!");
+        return;
+    }   
+
     // Start service for finding relative pose between SLAM and vicon frames
-    std::string service_name = "/" + ns_ + "/batch_solver/start_new_batch";
-    rel_pose_client_ = nh_.serviceClient<mg_msgs::RequestRelativePoseBatch>(service_name);
+    std::string rel_pose_srv_name = "/" + ns_ + "/batch_solver/start_new_batch";
+    rel_pose_client_ = nh_.serviceClient<mg_msgs::RequestRelativePoseBatch>(rel_pose_srv_name);
     mg_msgs::RequestRelativePoseBatch client_msg;
     client_msg.request.data = 50;
     ROS_INFO("Calling service '%s' for batch solution!", rel_pose_client_.getService().c_str());
@@ -132,8 +146,20 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     mission_.ReturnWhenIdle();
     ROS_INFO("[mission_node] Quad is idle!");
 
+    // Stop service for collecting yolo data for triangulation: solve triangulation
+    std::string stop_triangulation_srv_name = "/" + ns_ + "/triangulation/stop_collecting_yolo_data";
+    triangulation_stop_client_ = nh_.serviceClient<std_srvs::Trigger>(stop_triangulation_srv_name);
+    std_srvs::Trigger triangulation_client_msg;
+    ROS_INFO("Calling service '%s' for batch solution!", triangulation_stop_client_.getService().c_str());
+    if (triangulation_stop_client_.call(triangulation_client_msg)) {
+        ROS_INFO("[mission_node] Triangulation service solved successfully!");
+    } else {
+        ROS_WARN("[mission_node] Error calling triangulation service. Aborting!");
+        return;
+    }  
+
     // Disarm quad
-    mission_.DisarmQuad(ns_, nh);
+    // mission_.DisarmQuad(ns_, nh);
 
 }
 
@@ -148,6 +174,7 @@ bool InspectorClass::LoadWaypoints(const std::string &filename,
     Eigen::Matrix3d rot = rel_att.toRotationMatrix();
     Eigen::Vector3d rpy = helper::quat2rpy(rel_pose.orientation);
     float rel_yaw = rpy(2);
+    float camera_to_base_link = 0.1;  // Camera is 10cm ahead of the base link in vicon
     // init_pose.getBasis().getRPY(init_roll, init_pitch, init_yaw);
     // ROS_INFO("Init yaw: %f", init_yaw);
 
@@ -155,8 +182,9 @@ bool InspectorClass::LoadWaypoints(const std::string &filename,
     // Check whether file could be opened (path might be wrong)
     if (myfile.is_open()) {
         while( myfile >> x >> y >> z >> yaw) {
-            Eigen::Vector3d pos_slam(x, y, z);
+            const Eigen::Vector3d pos_slam(x, y, z);
             Eigen::Vector3d pos_vicon = rel_pos + rot*pos_slam;
+            pos_vicon = pos_vicon - camera_to_base_link*Eigen::Vector3d(cos(rel_yaw + yaw), sin(rel_yaw + yaw), 0.0);
             waypoint_list->push_back(mission_planner::xyz_heading(pos_vicon, rel_yaw + yaw));
             // std::cout << x << " " << y << " " << z << " " << init_yaw-yaw << std::endl;
         }

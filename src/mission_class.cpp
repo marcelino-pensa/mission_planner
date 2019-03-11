@@ -95,8 +95,8 @@ bool MissionClass::Takeoff(const std::string &ns, const double &takeoff_height, 
     double yaw, pitch, roll;
     tf_initial_pose.transform_.getBasis().getRPY(roll, pitch, yaw);
 
-    // Plan a minimum snap trajectory for taking-off
-    double tf = takeoff_height/avg_velocity;
+    // Plan a minimum snap trajectory for taking-off (need to take at least 1sec to takeoff)
+    double tf = std::max(2.0*std::fabs(takeoff_height)/avg_velocity, 1.0);
     Eigen::Vector3d init_pos = helper::rostfvec2eigenvec(tf_initial_pose.transform_.getOrigin());
     Eigen::Vector3d pos_final = init_pos + Eigen::Vector3d(0.0, 0.0, takeoff_height);
 

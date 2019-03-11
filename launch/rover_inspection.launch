@@ -1,6 +1,6 @@
 <launch>
 
-	<arg name="namespace" default="Frodo"/>
+	<arg name="namespace" default="Bilbo"/>
 
     <group ns="$(arg namespace)">
 
@@ -15,7 +15,7 @@
 
 			<!-- Guidance parameters -->
 			<param name="takeoff_height" value="0.75"/> <!-- Takeoff height (in meters) -->
-			<param name="max_velocity" value="0.25"/>   <!-- Maximum speed (in meters/sec) -->
+			<param name="max_velocity" value="0.15"/>   <!-- Maximum speed (in meters/sec) -->
 
 			<!-- Thread update rates (in Hz) -->
 			<param name="tf_update_rate" value="100"/>
@@ -27,6 +27,11 @@
 
     	<!-- Batch solver to find relative pose between vicon and SLAM -->
         <include file="$(find batch_pose_estimator)/launch/slam2vicon.launch">
+    	    <arg name="namespace" value="$(arg namespace)" />
+	    </include>
+
+	    <!-- Triangulation node to find emoji locations -->
+        <include file="$(find yolo_triangulation)/launch/triangulate.launch">
     	    <arg name="namespace" value="$(arg namespace)" />
 	    </include>
 

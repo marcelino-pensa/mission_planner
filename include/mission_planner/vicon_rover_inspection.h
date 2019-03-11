@@ -13,8 +13,10 @@
 #include <mission_planner/mission_class.h>
 #include <mission_planner/xyz_heading.h>
 
-// Service for batch solution of relative pose
+// Service types
 #include <mg_msgs/RequestRelativePoseBatch.h>
+#include <mg_msgs/set_strings.h>
+#include <std_srvs/Trigger.h>
 
 // Miscellaneous libraries
 #include "mission_planner/msg_conversions.h"
@@ -69,7 +71,7 @@ class InspectorClass {
 
   // Relative pose between vicon frame and slam frame
   geometry_msgs::Pose relative_pose_;
-  ros::ServiceClient rel_pose_client_;
+  ros::ServiceClient rel_pose_client_, triangulation_start_client_, triangulation_stop_client_;
 
   // nodehandle
   ros::NodeHandle nh_;

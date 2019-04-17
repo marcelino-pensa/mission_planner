@@ -24,6 +24,7 @@ find_package(Eigen REQUIRED)
 ###################################
 catkin_package(
   DEPENDS Eigen
+  mg_msgs
 )
 
 ###########
@@ -43,24 +44,43 @@ add_executable(inspector_node
                src/inspection_class.cpp
                src/mission_node.cpp
                src/mission_class.cpp
+               src/drone_threads.cpp
                src/helper.cpp
-               src/threads.cpp
-               src/callbacks.cpp)
+               src/callbacks.cpp
+               src/visualization_functions.cpp)
 target_link_libraries(inspector_node ${catkin_LIBRARIES})
-add_dependencies(inspector_node mavros_msgs_generate_messages_cpp mg_msgs_generate_messages_cpp
-                                mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS})
+add_dependencies(inspector_node mavros_msgs_generate_messages_cpp mg_msgs_gencpp
+                 mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
+                 ${mg_msgs_EXPORTED_TARGETS})
 
 # Rover inspection node
 add_executable(vicon_rover_inspection 
-               src/vicon_rover_inspection.cpp
                src/mission_node.cpp
+               src/vicon_rover_inspection.cpp
                src/mission_class.cpp
+               src/drone_threads.cpp
                src/helper.cpp
-               src/threads.cpp
                src/callbacks.cpp
-               src/msg_conversions.cpp
                src/visualization_functions.cpp)
 target_link_libraries(vicon_rover_inspection ${catkin_LIBRARIES})
-add_dependencies(vicon_rover_inspection mavros_msgs_generate_messages_cpp mg_msgs_generate_messages_cpp
-                                mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS})
+add_dependencies(vicon_rover_inspection mavros_msgs_generate_messages_cpp mg_msgs_gencpp
+                 mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
+                 ${mg_msgs_EXPORTED_TARGETS})
+
+# Rover inspection node
+add_executable(vicon_swarm_inspection 
+               src/swarm_mission_node.cpp
+               src/vicon_swarm_inspection.cpp
+               src/mission_class.cpp
+               src/drone_threads.cpp
+               src/rover_mission_class.cpp
+               src/rover_threads.cpp
+               src/helper.cpp
+               src/callbacks.cpp
+               src/polynomials.cpp
+               src/visualization_functions.cpp)
+target_link_libraries(vicon_swarm_inspection ${catkin_LIBRARIES})
+add_dependencies(vicon_swarm_inspection mavros_msgs_generate_messages_cpp mg_msgs_gencpp
+                 mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
+                 ${mg_msgs_EXPORTED_TARGETS})
 

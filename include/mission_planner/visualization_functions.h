@@ -24,7 +24,10 @@
 #include <string>
 #include <vector>
 #include <set>
-#include "msg_conversions.h"
+#include <mission_planner/helper.h>
+#include "nav_msgs/Path.h"
+#include "mg_msgs/PVAJS_array.h"
+#include "mg_msgs/PolyPVA.h"
 
 namespace visualization_functions {
 
@@ -55,6 +58,8 @@ class Color : public std_msgs::ColorRGBA {
   static const Color Pink() { return Color(1.0, 0.0, 0.5); }
 };
 
+void SelectColor(const uint &i, std_msgs::ColorRGBA *color);
+
 void DrawArrowPoints(const geometry_msgs::Point& p1,
                      const geometry_msgs::Point& p2,
                      const std_msgs::ColorRGBA &color,
@@ -75,6 +80,32 @@ void DrawArrowPoints(const Eigen::Vector3d& p1,
 
 void DeleteMarkersTemplate(const std::string &frame_id,
                            visualization_msgs::MarkerArray *marker_array);
+
+void drawTrajectory(const mg_msgs::PVAJS_array &flatStates, 
+                    const std::string &frame_id,
+                    const std::string &ns,
+                    const std_msgs::ColorRGBA &color,
+                    visualization_msgs::MarkerArray* marker_array);
+
+void drawTrajectory(const std::vector<Eigen::Vector2d> &trajectory,
+                    const double &height,
+                    const std::string &frame_id,
+                    const std::string &ns,
+                    const std_msgs::ColorRGBA &color,
+                    visualization_msgs::MarkerArray* marker_array);
+
+void drawWaypoints(const nav_msgs::Path &Waypoints, 
+                   const std::string& frame_id,
+                   visualization_msgs::MarkerArray* marker_array);
+
+void drawWaypoints(const std::vector<Eigen::Vector2d> &Waypoints,
+                   const double &height,
+                   const std::string& frame_id,
+                   visualization_msgs::MarkerArray* marker_array);
+
+void deleteMarkersTemplate(const std::string &frame_id,
+                           visualization_msgs::MarkerArray* marker_array);
+
 }  // namespace visualization_functions
 
 #endif  // VISUALIZATION_FUNCTIONS_H_

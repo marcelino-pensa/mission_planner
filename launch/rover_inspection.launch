@@ -1,6 +1,6 @@
 <launch>
 
-	<arg name="namespace" default="Bilbo"/>
+	<arg name="namespace" default="Frodo"/>
 
     <group ns="$(arg namespace)">
 
@@ -24,18 +24,17 @@
 		<!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
     	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" output="screen"/> 
 
-
-    	<!-- Batch solver to find relative pose between vicon and SLAM -->
-        <include file="$(find batch_pose_estimator)/launch/slam2vicon.launch">
-    	    <arg name="namespace" value="$(arg namespace)" />
-	    </include>
-
-	    <!-- Triangulation node to find emoji locations -->
-        <include file="$(find yolo_triangulation)/launch/triangulate.launch">
-    	    <arg name="namespace" value="$(arg namespace)" />
-	    </include>
-
     </group>
+
+	<!-- Batch solver to find relative pose between vicon and SLAM -->
+    <include file="$(find batch_pose_estimator)/launch/slam2vicon.launch">
+	    <arg name="namespace" value="$(arg namespace)" />
+    </include>
+
+    <!-- Triangulation node to find emoji locations -->
+    <include file="$(find yolo_triangulation)/launch/triangulate.launch">
+	    <arg name="namespace" value="$(arg namespace)" />
+    </include>
 
     <!-- <include file="$(find mapper)/launch/mapper_ns.launch">
 		<arg name="namespace" value="$(arg namespace)" />

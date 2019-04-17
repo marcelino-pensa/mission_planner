@@ -8,9 +8,10 @@
 #include <tf/transform_listener.h>
 
 // Local defined libraries
-#include <mission_planner/structs.h>
+#include <mission_planner/drone_structs.h>
 #include <mission_planner/helper.h>
 #include <mission_planner/tf_class.h>
+#include <mission_planner/visualization_functions.h>
 
 // Msg/srv defined in other packages
 #include "mg_msgs/minSnapWpStamped.h"
@@ -42,12 +43,12 @@ class MissionClass {
  public:
   MissionClass() {};
   MissionClass(const std::string &ns, const double &tf_update_rate,
-               const double &max_velocity);
+               const double &max_velocity, const uint &drone_index = 0);
   ~MissionClass();
 
   //Methods -------------------------------------------------------
   void Initialize(const std::string &ns, const double &tf_update_rate,
-                  const double &max_velocity);
+                  const double &max_velocity, const uint &drone_index = 0);
 
   // Method for starting the quadcopter to listen to PVA messages
   void SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh);
@@ -59,6 +60,14 @@ class MissionClass {
   void AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints, const Eigen::Vector3d &init_vel,
                            const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
                            const double &sampling_time, xyz_heading *final_waypoint);
+
+  // Same as before, but each traectory is named (for distinguishing between them in Rviz)
+  void AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints, const Eigen::Vector3d &init_vel,  
+                                       const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
+                                       const double &sampling_time, const std::string &traj_name, xyz_heading *final_waypoint);
+
+  // Add disarm command to buffer (quad disarms after finishes all other previous commands)
+  void AddDisarm2Buffer();
 
   // Method for taking off when on the ground. Returns final position/heading
   bool Takeoff(const std::string &ns, const double &takeoff_height, const double &sampling_time,
@@ -130,7 +139,7 @@ class MissionClass {
   // Blocking function that returns when quad is idle
   void ReturnWhenIdle();
 
-  // Callbacks (see services.cpp for implementation) ------------------------------
+  // Callbacks (see callbacks.cpp for implementation) ------------------------------
   void ActionGoalStatusCallback(const actionlib_msgs::GoalStatusArray::ConstPtr &msg);
 
  protected:
@@ -144,6 +153,9 @@ class MissionClass {
   // Consumes minimum snap trajectories (sends to action server)
   void TrajectoryActionCaller(const std::string &ns);
 
+  // Thread for publishing trajectories into ROS
+  void RvizPubThread(const std::string &ns);
+
 
  private:
   // Declare global variables (structures defined in structs.h)
@@ -154,7 +166,7 @@ class MissionClass {
   std::string ns_;
 
   // Thread variables
-  std::thread h_tf_thread_, h_min_snap_thread_, h_trajectory_caller_thread_;
+  std::thread h_tf_thread_, h_min_snap_thread_, h_trajectory_caller_thread_, h_rviz_pub_thread_;
 
   // Subscriber variables
   ros::Subscriber action_status_sub_;
@@ -164,6 +176,9 @@ class MissionClass {
 
   // Navigation parameters
   double max_velocity_;
+
+  // Rviz trajectory color
+  std_msgs::ColorRGBA traj_color_;
 
 };
 

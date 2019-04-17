@@ -1,6 +1,6 @@
 
 
-#include <mission_planner/vicon_rover_inspection.h>
+#include <mission_planner/vicon_swarm_inspection.h>
 
 // ---------------------------------------------------
 namespace inspector {
@@ -8,9 +8,11 @@ namespace inspector {
 void InspectorClass::Mission(ros::NodeHandle *nh) {
     nh_ = *nh;
 
-    // Get namespace of current node
-    nh_.getParam("namespace", ns_);
-    ROS_INFO("[mission_node] namespace: %s", ns_.c_str());
+    // Get names of drones in the swarm
+    nh_.getParam("namespaces", ns_);
+    for (uint i = 0; i < ns_.size(); i++) {
+        ROS_INFO("[%s mission_node] Drone %d", ns_[i].c_str(), i);
+    }
 
     // Get update rate for tf threads
     double tf_update_rate;
@@ -22,13 +24,17 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     nh_.getParam("max_velocity", max_velocity_);
 
     // Get path for waypoint files
-    std::string localization_file, inspection_file;
-    nh_.getParam("localization_waypoints_path", localization_file);
-    nh_.getParam("inspection_waypoints_path", inspection_file);
+    std::vector<std::string> inspection_files;
+    nh_.getParam("inspection_waypoints_path", inspection_files);
 
-    // Start the Mission Planner Engine
-    ROS_INFO("[mission_node] Starting Mission Planner Engine!");    
-    mission_.Initialize(ns_, tf_update_rate, max_velocity_);
+    // Start a Mission Planner Engine For each Drone
+    ROS_INFO("[%mission_node] Starting Mission Planner Engine!");
+    // mission_.resize(ns_.size());
+    for (uint i = 0; i < ns_.size(); i++) {
+        // mission_planner::MissionClass drone_mission;
+        mission_.push_back(new mission_planner::MissionClass());
+        mission_[i]->Initialize(ns_[i], tf_update_rate, max_velocity_, i);
+    }
 
     // Start waypoint marker publisher and delete all markers currently published
     ROS_INFO("[mission_node] Creating visualization marker publisher!");    
@@ -38,14 +44,18 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     waypoint_marker_pub_.publish(wp_markers);
 
     // Wait until measurements are available
-    ROS_INFO("[mission_node] Waiting for first pose in tf tree...");
-    tf::StampedTransform tf_initial_pose = mission_.WaitForFirstPose();
-    mission_planner::xyz_heading origin(tf_initial_pose);
-    ROS_INFO("[mission_node] First pose obtained from tf tree!");
+    std::vector<mission_planner::xyz_heading> origin;
+    ROS_INFO("[mission_node] Waiting for first pose in tf trees...");
+    for (uint i = 0; i < ns_.size(); i++) {
+        tf::StampedTransform tf_initial_pose = mission_[i]->WaitForFirstPose();
+        origin.push_back(mission_planner::xyz_heading(tf_initial_pose));
+        ROS_INFO("[%s mission_node] First pose obtained from tf tree!", ns_[i].c_str());
+    }
 
     // Variable for setting waypoints
     std::vector<mission_planner::xyz_heading> waypoints;
-    mission_planner::xyz_heading final_waypoint;     // Variable used to save last waypoint on each sequence of waypoints
+    std::vector<mission_planner::xyz_heading> final_waypoint;     // Variable used to save last waypoint on each sequence of waypoints
+    final_waypoint.resize(ns_.size());
 
     // Navigation constant variables
     const double max_vel = max_velocity_, max_acc = 5.0;
@@ -54,12 +64,16 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
 
     // Takeoff
     ROS_INFO("[mission_node] Taking off!");
-    mission_.Takeoff(ns_, takeoff_height-origin.z_, sampling_time, max_velocity_, nh, &final_waypoint);
+    for (uint i = 0; i < ns_.size(); i++) {
+        mission_[i]->Takeoff(ns_[i], takeoff_height-origin[i].z_, sampling_time, max_velocity_, nh, &final_waypoint[i]);
+    }
 
-    // Wait until quad is done taking off before executing the next step of the mission
+    // Wait until all quads are done taking off before executing the next step of the mission
     ROS_INFO("[mission_node] Wait until quad is idle...");
-    mission_.ReturnWhenIdle();
-    ROS_INFO("[mission_node] Quad is idle!");
+    for (uint i = 0; i < ns_.size(); i++) {
+        mission_[i]->ReturnWhenIdle();
+    }
+    ROS_INFO("[mission_node] Quads are idle!");
 
     // Start service for collecting yolo data for triangulation
     std::string start_triangulation_srv_name = "/triangulation/collect_yolo_data";
@@ -93,58 +107,88 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     geometry_msgs::Pose rel_pose = client_msg.response.pose;
     rel_tf_pub_thread_ = std::thread(&InspectorClass::RelTfPubTask, this, rel_pose);
 
-    // Load inspection file, transforming data into vicon frame
-    if(LoadWaypoints(inspection_file, rel_pose, &inspection_waypoint_list_) == 0) {
-        return;
-    } else {
-        ROS_INFO("[mission_node] Inspection waypoints were loaded successfully. Number of waypoints: %d",
-                 static_cast<int>(inspection_waypoint_list_.size()) );
+    // Load inspection files, transforming data into vicon frame
+    // inspection_waypoint_list_.resize(ns_.size());
+    for (uint i = 0; i < ns_.size(); i++) {
+        std::vector<mission_planner::xyz_heading> drone_inspection_list;
+        if(LoadWaypoints(inspection_files[i], rel_pose, &drone_inspection_list) == 0) {
+            return;
+        } else {
+            inspection_waypoint_list_.push_back(drone_inspection_list);
+            ROS_INFO("[%s mission_node] Inspection waypoints were loaded successfully. Number of waypoints: %d",
+                     ns_[i].c_str(), static_cast<int>(drone_inspection_list.size()) );
+        }
     }
 
     // Publish inspection waypoint markers
-    this->PublishWaypointMarkers(inspection_waypoint_list_);
+    for (uint i = 0; i < ns_.size(); i++) {
+        this->PublishWaypointMarkers(inspection_waypoint_list_[i], i);
+    }
 
     // Minimum snap cannot be solved for too many input waypoints (polynomial complexity). 
     // We divide the waypoints into subset of waypoints, which can be solved quickly.
     // In addition, a sequence of waypoints can be calculated while a trajectory is being executed.
     ROS_INFO("[mission_node] Splitting in segments...");
-    std::vector<std::pair<uint, uint>> segments;
+    std::vector<std::vector<std::pair<uint, uint>> > segments;
     uint wp_per_segment = 30;
-    segments = helper::split_waypoints(inspection_waypoint_list_.size(), wp_per_segment);
+    segments.resize(ns_.size());
+    for (uint i = 0; i < ns_.size(); i++) {
+        segments[i] = helper::split_waypoints(inspection_waypoint_list_[i].size(), wp_per_segment);
+    }
     
     // Go to initial waypoint in the set
     ROS_INFO("[mission_node] Going to initial waypoint in the set...");
-    waypoints.push_back(final_waypoint);
-    waypoints.push_back(inspection_waypoint_list_[0]);
-    mission_.AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
+    for (uint i = 0; i < ns_.size(); i++) {
+        waypoints.clear();
+        waypoints.push_back(final_waypoint[i]);
+        waypoints.push_back(inspection_waypoint_list_[i][0]);
+        std::string name = ns_[i] + "/go_to_first_wp";
+        mission_[i]->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, name, &final_waypoint[i]);
+    }
     
     // Add sets of waypoints to buffer
     ROS_INFO("[mission_node] Adding sets of waypoints to buffer...");
-    for (uint k = 0; k < segments.size(); k++) {
-        ROS_INFO("Adding waypoints %d to %d into buffer.", int(segments[k].first), int(segments[k].second));
-        waypoints.clear();
-        for (uint i = segments[k].first; i <= segments[k].second; i++) {
-            waypoints.push_back(inspection_waypoint_list_[i]);
+    for (uint i = 0; i < ns_.size(); i++) {
+        for (uint k = 0; k < segments[i].size(); k++) {
+            ROS_INFO("Adding waypoints %d to %d into buffer.", int(segments[i][k].first), int(segments[i][k].second));
+            waypoints.clear();
+            for (uint j = segments[i][k].first; j <= segments[i][k].second; j++) {
+                waypoints.push_back(inspection_waypoint_list_[i][j]);
+            }
+            std::string name = ns_[i] + "traj" + std::to_string(k);
+            mission_[i]->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, name, &final_waypoint[i]);
         }
-        mission_.AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
     }
 
     // Go to origin
-    waypoints.clear();
-    waypoints.push_back(final_waypoint);
-    waypoints.push_back(mission_planner::xyz_heading(origin.x_, origin.y_, final_waypoint.z_, origin.yaw_));
-    mission_.AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
+    for (uint i = 0; i < ns_.size(); i++) {
+        waypoints.clear();
+        waypoints.push_back(final_waypoint[i]);
+        waypoints.push_back(mission_planner::xyz_heading(origin[i].x_, origin[i].y_, final_waypoint[i].z_, origin[i].yaw_));
+        std::string name = ns_[i] + "/go_to_origin";
+        mission_[i]->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, name, &final_waypoint[i]);
+    }
 
     // Land
-    waypoints.clear();
-    waypoints.push_back(final_waypoint);
-    waypoints.push_back(mission_planner::xyz_heading(final_waypoint.x_, final_waypoint.y_, 0.0, final_waypoint.yaw_));
-    mission_.AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, &final_waypoint);
+    for (uint i = 0; i < ns_.size(); i++) {
+        waypoints.clear();
+        waypoints.push_back(final_waypoint[i]);
+        waypoints.push_back(mission_planner::xyz_heading(final_waypoint[i].x_, final_waypoint[i].y_, -0.5, final_waypoint[i].yaw_));
+        std::string name = ns_[i] + "/land";
+        mission_[i]->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, name, &final_waypoint[i]);
+    }
 
-    // Wait until quad is done with landing before executing the next step of the mission
+    // Set quads for disarming
+    for (uint i = 0; i < ns_.size(); i++) {
+        mission_[i]->AddDisarm2Buffer();
+    }
+
+    // Wait until quads are done with landing before executing the next step of the mission
     ROS_INFO("[mission_node] Wait until quad is idle...");
-    mission_.ReturnWhenIdle();
-    ROS_INFO("[mission_node] Quad is idle!");
+    for (uint i = 0; i < ns_.size(); i++) {
+        mission_[i]->ReturnWhenIdle();
+        ROS_INFO("[%s mission_node] Quad is idle!", ns_[i].c_str());
+    }
 
     // Stop service for collecting yolo data for triangulation: solve triangulation
     std::string stop_triangulation_srv_name = "/triangulation/stop_collecting_yolo_data";
@@ -158,8 +202,10 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
         return;
     }  
 
-    // Disarm quad
-    // mission_.DisarmQuad(ns_, nh);
+    // // Disarm quad
+    // for (uint i = 0; i < ns_.size(); i++){
+    //     mission_[i].DisarmQuad(ns_[i], nh);
+    // }
 
 }
 
@@ -203,10 +249,12 @@ bool InspectorClass::LoadWaypoints(const std::string &filename,
     }
 }
 
-void InspectorClass::PublishWaypointMarkers(const std::vector<mission_planner::xyz_heading> &waypoint_list) {
+void InspectorClass::PublishWaypointMarkers(const std::vector<mission_planner::xyz_heading> &waypoint_list,
+                                            const uint &color_index) {
     // Set marker properties
     double diameter = 0.01;
-    std_msgs::ColorRGBA color = visualization_functions::Color::Cyan();
+    std_msgs::ColorRGBA color;
+    visualization_functions::SelectColor(color_index, &color);
     std::string ns = "waypoints";
     double marker_length = 0.1;
     visualization_msgs::MarkerArray wp_markers;

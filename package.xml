@@ -26,12 +26,14 @@
   <build_depend>std_msgs</build_depend>
   <build_depend>px4_control</build_depend>
   <build_depend>mav_trajectory_generation_ros</build_depend>
+
   <build_export_depend>mavros_msgs</build_export_depend>
   <build_export_depend>mg_msgs</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>px4_control</build_export_depend>
   <build_export_depend>mav_trajectory_generation_ros</build_export_depend>
+  
   <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>mg_msgs</exec_depend>
   <exec_depend>roscpp</exec_depend>

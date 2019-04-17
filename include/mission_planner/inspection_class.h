@@ -13,7 +13,7 @@
 #include <mission_planner/xyz_heading.h>
 
 // // Local defined libraries
-// #include <mission_planner/structs.h>
+// #include <mission_planner/drone_structs.h>
 // #include <mission_planner/helper.h>
 // #include <mission_planner/tf_class.h>
 

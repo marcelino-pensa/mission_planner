@@ -6,8 +6,8 @@
 namespace mission_planner {
 
 MissionClass::MissionClass(const std::string &ns, const double &tf_update_rate,
-                           const double &max_velocity) {
-    this->Initialize(ns, tf_update_rate, max_velocity);
+                           const double &max_velocity, const uint &drone_index) {
+    this->Initialize(ns, tf_update_rate, max_velocity, drone_index);
 }
 
 MissionClass::~MissionClass() {
@@ -15,57 +15,60 @@ MissionClass::~MissionClass() {
     h_tf_thread_.join();
     h_min_snap_thread_.join();
     h_trajectory_caller_thread_.join();
+    h_rviz_pub_thread_.join();
 }
 
 void MissionClass::Initialize(const std::string &ns, const double &tf_update_rate,
-                              const double &max_velocity) {
+                              const double &max_velocity, const uint &drone_index) {
     ns_ = ns;
     tf_update_rate_ = tf_update_rate;
     max_velocity_ = max_velocity;
+    visualization_functions::SelectColor(drone_index, &traj_color_);
 
     // Start threads --------------------------------------------------------------
     h_tf_thread_ = std::thread(&MissionClass::TfTask, this);
     h_min_snap_thread_ = std::thread(&MissionClass::MinSnapSolverTask, this, ns_);
     h_trajectory_caller_thread_ = std::thread(&MissionClass::TrajectoryActionCaller, this, ns_);
+    h_rviz_pub_thread_ = std::thread(&MissionClass::RvizPubThread, this, ns_);
 }
 
 void MissionClass::SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh) {
-    ROS_INFO("[mission_node] Requesting Vehicle to Start Position Mode! This requires px4_control_node to be executing!");
+    ROS_INFO("[%s mission_node] Requesting Vehicle to Start Position Mode! This requires px4_control_node to be executing!", ns_.c_str());
 
     std::string service_name = "/" + ns + "/px4_control_node/setQuadPVAMode";
     ros::ServiceClient client = nh->serviceClient<std_srvs::Trigger>(service_name);
     
     if(!client.waitForExistence(ros::Duration(1.0))) {
-        ROS_ERROR("[mission_node] Service ""%s"" unavailable for call.", client.getService().c_str());
+        ROS_ERROR("[%s mission_node] Service ""%s"" unavailable for call.", ns_.c_str(), client.getService().c_str());
     }
 
     std_srvs::Trigger trigger_msg;
     if (client.call(trigger_msg)) {
         if(trigger_msg.response.success == false) {
-            ROS_ERROR("[mission_node] Failed to set vehicle to listen to position commands.");
+            ROS_ERROR("[%s mission_node] Failed to set vehicle to listen to position commands.", ns_.c_str());
         }
     } else {
-        ROS_ERROR("[mission_node] Failed to call service.");
+        ROS_ERROR("[%s mission_node] Failed to call service.", ns_.c_str());
     }
 }
 
 void MissionClass::DisarmQuad(const std::string &ns, ros::NodeHandle *nh) {
-    ROS_INFO("[mission_node] Requesting Vehicle to Disarm Motors! This requires px4_control_node to be executing!");
+    ROS_INFO("[%s mission_node] Requesting Vehicle to Disarm Motors! This requires px4_control_node to be executing!", ns_.c_str());
 
     std::string service_name = "/" + ns + "/px4_control_node/disarmQuad";
     ros::ServiceClient client = nh->serviceClient<std_srvs::Trigger>(service_name);
     
     if(!client.waitForExistence(ros::Duration(1.0))) {
-        ROS_ERROR("[mission_node] Service ""%s"" unavailable for call.", client.getService().c_str());
+        ROS_ERROR("[%s mission_node] Service ""%s"" unavailable for call.", ns_.c_str(), client.getService().c_str());
     }
 
     std_srvs::Trigger trigger_msg;
     if (client.call(trigger_msg)) {
         if(trigger_msg.response.success == false) {
-            ROS_ERROR("[mission_node] Failed to set vehicle to listen to disarm.");
+            ROS_ERROR("[%s mission_node] Failed to set vehicle to listen to disarm.", ns_.c_str());
         }
     } else {
-        ROS_ERROR("[mission_node] Failed to call service.");
+        ROS_ERROR("[%s mission_node] Failed to call service.", ns_.c_str());
     }
 }
 
@@ -73,15 +76,36 @@ void MissionClass::AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints
                                        const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
                                        const double &sampling_time, xyz_heading *final_waypoint) {
     if(waypoints.size() <= 1) {
-        ROS_WARN("[mission_node] Not enough waypoints to add!");
+        ROS_WARN("[%s mission_node] Not enough waypoints to add!", ns_.c_str());
         return;
     }
 
     mutexes_.waypoint_buffer.lock();
-        globals_.min_snap_inputs.push(minSnapWpInputs(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time));
+        globals_.min_snap_inputs.push(minSnapWpInputs(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, ""));
     mutexes_.waypoint_buffer.unlock();
 
     *final_waypoint = waypoints[waypoints.size()-1];
+}
+
+void MissionClass::AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints, const Eigen::Vector3d &init_vel,
+                                       const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
+                                       const double &sampling_time, const std::string &traj_name, xyz_heading *final_waypoint) {
+    if(waypoints.size() <= 1) {
+        ROS_WARN("[%s mission_node] Not enough waypoints to add!", ns_.c_str());
+        return;
+    }
+
+    mutexes_.waypoint_buffer.lock();
+        globals_.min_snap_inputs.push(minSnapWpInputs(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, traj_name));
+    mutexes_.waypoint_buffer.unlock();
+
+    *final_waypoint = waypoints[waypoints.size()-1];
+}
+
+void MissionClass::AddDisarm2Buffer() {
+    mutexes_.waypoint_buffer.lock();
+        globals_.min_snap_inputs.push(minSnapWpInputs("Disarm"));
+    mutexes_.waypoint_buffer.unlock();
 }
 
 // Method for taking off when on the ground 
@@ -115,6 +139,15 @@ bool MissionClass::Takeoff(const std::string &ns, const double &takeoff_height, 
 
     *final_xyz_yaw = xyz_heading(pos_final, yaw);
 
+    // Add to list for Rviz publishing
+    std::string name = ns + "/takeoff";
+    std::vector<xyz_heading> waypoints;
+    waypoints.push_back(xyz_heading(init_pos, yaw));
+    waypoints.push_back(xyz_heading(pos_final, yaw));
+    mutexes_.wp_traj_buffer.lock();
+        globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
+    mutexes_.wp_traj_buffer.unlock();
+
     return 1;
 }
 
@@ -134,7 +167,7 @@ bool MissionClass::Land(const std::string &ns, const double &land_height, const 
     Eigen::Vector3d pos_final = init_pos;
     pos_final[2] = land_height;
     double height = fabs(init_pos[2] - land_height);
-    double tf = height/avg_velocity;
+    double tf = std::max(0.5*height/avg_velocity, 1.0);
 
     // Get smooth trajectory for landing
     mission_planner::TrajectoryActionInputs traj_inputs;
@@ -149,31 +182,40 @@ bool MissionClass::Land(const std::string &ns, const double &land_height, const 
         globals_.traj_inputs.push_back(traj_inputs);
     mutexes_.trajectory_buffer.unlock();
 
+    // Add to list for Rviz publishing
+    std::string name = ns + "/land";
+    std::vector<xyz_heading> waypoints;
+    waypoints.push_back(xyz_heading(init_pos, yaw));
+    waypoints.push_back(xyz_heading(pos_final, yaw));
+    mutexes_.wp_traj_buffer.lock();
+        globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
+    mutexes_.wp_traj_buffer.unlock();
+
     return 1;
 }
 
 // Method for landing from a current location (use px4_control autoland)
 bool MissionClass::Land(const std::string &ns, ros::NodeHandle *nh) {
-    ROS_INFO("[mission_node] Requesting Vehicle to Land! This requires px4_control_node to be executing!");
+    ROS_INFO("[%s mission_node] Requesting Vehicle to Land! This requires px4_control_node to be executing!", ns_.c_str());
 
     std::string service_name = "/" + ns + "/px4_control_node/landQuad";
     ros::ServiceClient client = nh->serviceClient<std_srvs::Trigger>(service_name);
     
     if(!client.waitForExistence(ros::Duration(1.0))) {
-        ROS_ERROR("[mission_node] Service ""%s"" unavailable for call.", client.getService().c_str());
+        ROS_ERROR("[%s mission_node] Service ""%s"" unavailable for call.", ns_.c_str(), client.getService().c_str());
     }
 
     std_srvs::Trigger trigger_msg;
     if (client.call(trigger_msg)) {
         if(trigger_msg.response.success == false) {
-            ROS_ERROR("[mission_node] Failed to set vehicle to land.");
+            ROS_ERROR("[%s mission_node] Failed to set vehicle to land.", ns_.c_str());
         }
     } else {
-        ROS_ERROR("[mission_node] Failed to call service.");
+        ROS_ERROR("[%s mission_node] Failed to call service.", ns_.c_str());
     }
 }
 
-// Method for going straight to a final point 
+// Method for going straight to a final point
 bool MissionClass::GoStraight2Point(const std::string &ns, const xyz_heading &destination, const double &sampling_time,
                                     const double &max_velocity, ros::NodeHandle *nh) {
     // Get current pose
@@ -203,10 +245,19 @@ bool MissionClass::GoStraight2Point(const std::string &ns, const xyz_heading &de
         globals_.traj_inputs.push_back(traj_inputs);
     mutexes_.trajectory_buffer.unlock();
 
+    // Add to list for Rviz publishing
+    std::string name = ns + "/p2p";
+    std::vector<xyz_heading> waypoints;
+    waypoints.push_back(xyz_heading(init_pos, yaw));
+    waypoints.push_back(xyz_heading(final_pos, yaw));
+    mutexes_.wp_traj_buffer.lock();
+        globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
+    mutexes_.wp_traj_buffer.unlock();
+
     return 1;
 }
 
-// Method for executing waypoint navigation (blocks execution of code until finished)
+// Method for executing waypoint navigation (blocks execution of code until finished) - DEPRECATED
 bool MissionClass::WaypointNavigation(const std::string &ns, const std::vector<xyz_heading> waypoints,
                                       const Eigen::Vector3d &init_vel, const Eigen::Vector3d &final_vel,
                                       const double &max_vel, const double &max_acc, const double &sampling_time,
@@ -250,6 +301,15 @@ bool MissionClass::MinSnapPoint2Point(const std::string &ns, const Eigen::Vector
                                       const Eigen::Vector3d &final_point, const double &yaw0,
                                       const double &yaw_final, const double &tf, const double &sampling_time,
                                       ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates) {
+    // Unwrap yaw
+    double yaw_f = yaw_final;
+    while (yaw0 - yaw_f > M_PI) {
+      yaw_f = yaw_f + 2*M_PI;
+    }
+    while (yaw0 - yaw_f < -M_PI) {
+      yaw_f = yaw_f - 2*M_PI;
+    }
+
     // Set service client
     std::string service_name = "/" + ns + "/minSnap";
     ros::ServiceClient client = nh->serviceClient<mg_msgs::minSnapWpStamped>(service_name);
@@ -262,12 +322,12 @@ bool MissionClass::MinSnapPoint2Point(const std::string &ns, const Eigen::Vector
 
     // An intermediate point is needed for the minimum snap solver
     Pos_mid.pose.position = helper::eigenvec2rospoint(0.5*(init_point + final_point));
-    Pos_mid.pose.orientation = helper::set_quat(0.0, 0.0, 0.5*(yaw0 + yaw_final));
+    Pos_mid.pose.orientation = helper::set_quat(0.0, 0.0, 0.5*(yaw0 + yaw_f));
     Pos_mid.header.stamp = ros::Time(0.5*tf);
 
     // Set final point
     Pos_final.pose.position = helper::eigenvec2rospoint(final_point);
-    Pos_final.pose.orientation = helper::set_quat(0.0, 0.0, yaw_final);
+    Pos_final.pose.orientation = helper::set_quat(0.0, 0.0, yaw_f);
     Pos_final.header.stamp = ros::Time(tf);
 
     // Push points into waypoint structure
@@ -281,12 +341,12 @@ bool MissionClass::MinSnapPoint2Point(const std::string &ns, const Eigen::Vector
     srv.request.dt_flat_states.data = sampling_time;
     if (client.call(srv))
     {
-        ROS_INFO("Return size: %d", int(srv.response.flatStates.PVAJS_array.size()));
-        ROS_INFO("[mission_node] Service returned succesfully with point to point trajectory!");
+        // ROS_INFO("Return size: %d", int(srv.response.flatStates.PVAJS_array.size()));
+        ROS_INFO("[%s mission_node] Service returned succesfully with point to point trajectory!", ns_.c_str());
     }
     else
     {
-        ROS_ERROR("[mission_node] Failed to call service ""%s"" for point to point trajectory...",
+        ROS_ERROR("[%s mission_node] Failed to call service ""%s"" for point to point trajectory...", ns_.c_str(),
                   client.getService().c_str());
         return false;
     }
@@ -318,7 +378,7 @@ bool MissionClass::MinSnapWaypointSet(const std::string &ns, const std::vector<x
     const uint n_w = waypoints.size();
 
     if(n_w <= 2) {
-        ROS_ERROR("[mission_node] Not enough waypoints to plan a minimum snap trajectory");
+        ROS_ERROR("[%s mission_node] Not enough waypoints to plan a minimum snap trajectory", ns_.c_str());
     }
 
     // Set the waypoints into the appropriate structure
@@ -374,11 +434,11 @@ bool MissionClass::MinSnapWaypointSet(const std::string &ns, const std::vector<x
     if (client.call(srv))
     {
         ROS_INFO("Return size: %d", int(srv.response.flatStates.PVAJS_array.size()));
-        ROS_INFO("[mission_node] Service returned succesfully with waypoint trajectory!");
+        ROS_INFO("[%s mission_node] Service returned succesfully with waypoint trajectory!", ns_.c_str());
     }
     else
     {
-        ROS_ERROR("[mission_node] Failed to call service ""%s"" for waypoint trajectory...",
+        ROS_ERROR("[%s mission_node] Failed to call service ""%s"" for waypoint trajectory...", ns_.c_str(),
                   client.getService().c_str());
         return false;
     }
@@ -446,11 +506,11 @@ bool MissionClass::CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_a
 
     ros::Duration timeout(2.0);
     if(!client->waitForServer(timeout)) {
-        ROS_ERROR("[mission_node] Failed to call action server for sending trajectory: timeout!");
+        ROS_ERROR("[%s mission_node] Failed to call action server for sending trajectory: timeout!", ns_.c_str());
         return false;
     }
 
-    ROS_INFO("[mission_node] Action server started, sending goal.");
+    ROS_INFO("[%s mission_node] Action server started, sending goal.", ns_.c_str());
     mg_msgs::follow_PVAJS_trajectoryGoal action_msg_goal;
     action_msg_goal.samplingTime = sampling_time;
     action_msg_goal.flatStates = flatStates;

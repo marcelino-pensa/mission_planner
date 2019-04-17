@@ -52,30 +52,40 @@ void MissionClass::MinSnapSolverTask(const std::string &ns) {
             continue;
         }
 
-        // ROS_INFO("[MinSnapSolverTask] Running minimum snap problem!");
-
-        // Solve minimum snap problem
         mission_planner::TrajectoryActionInputs traj_inputs;
-        if (min_snap_input.waypoints_.size() < 2) {
-            ROS_WARN("Cannot solve minimum snap: not enough waypoints!");
-        } else if(min_snap_input.waypoints_.size() == 2) {
-            double distance = 
-                min_snap_input.waypoints_[0].GetXYZDist(min_snap_input.waypoints_[1]);
-            double tf = 2.0*distance/max_vel;
-            this->MinSnapPoint2Point(ns, min_snap_input.waypoints_[0],
-                          min_snap_input.waypoints_[1], tf, 
-                          min_snap_input.sampling_time_, &nh, &traj_inputs.flatStates);
-        } else {
-            this->MinSnapWaypointSet(ns, min_snap_input, &nh, &traj_inputs.flatStates);
-        }
-        traj_inputs.start_immediately = false;
-        traj_inputs.sampling_time = min_snap_input.sampling_time_;
-        traj_inputs.action_type = ActionType::Trajectory;
+        if (min_snap_input.name_.compare("Disarm") == 0) {  // Disarm command
+            traj_inputs.start_immediately = false;
+            traj_inputs.action_type = ActionType::Disarm;
+        } else {  // Trajectory command
+            // Solve minimum snap problem
+            if (min_snap_input.waypoints_.size() < 2) {
+                ROS_WARN("Cannot solve minimum snap: not enough waypoints!");
+            } else if(min_snap_input.waypoints_.size() == 2) {
+                double distance = 
+                    min_snap_input.waypoints_[0].GetXYZDist(min_snap_input.waypoints_[1]);
+                double tf = 2.0*distance/max_vel;
+                this->MinSnapPoint2Point(ns, min_snap_input.waypoints_[0],
+                              min_snap_input.waypoints_[1], tf, 
+                              min_snap_input.sampling_time_, &nh, &traj_inputs.flatStates);
+            } else {
+                this->MinSnapWaypointSet(ns, min_snap_input, &nh, &traj_inputs.flatStates);
+            }
+            traj_inputs.start_immediately = false;
+            traj_inputs.sampling_time = min_snap_input.sampling_time_;
+            traj_inputs.action_type = ActionType::Trajectory;
 
+            // Add to list for Rviz publishing
+            mutexes_.wp_traj_buffer.lock();
+                globals_.wp_traj_list.push(waypoint_and_trajectory(min_snap_input.waypoints_, traj_inputs.flatStates, min_snap_input.name_));
+            mutexes_.wp_traj_buffer.unlock();
+        }
+
+        // Add to buffer of quad trajectories
         mutexes_.trajectory_buffer.lock();
             globals_.traj_inputs.push_back(traj_inputs);
         mutexes_.trajectory_buffer.unlock();
 
+        // Remove waypoints from of min snap inputs
         mutexes_.waypoint_buffer.lock();
             globals_.min_snap_inputs.pop();
         mutexes_.waypoint_buffer.unlock();
@@ -156,6 +166,65 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
     }
 
     ROS_DEBUG("[mission_node] Exiting TrajectoryActionCaller...");
+}
+
+void MissionClass::RvizPubThread(const std::string &ns) {
+  ROS_INFO("[mission_node] Rviz trajectory publisher thread has started!");
+  ros::Rate loop_rate(2);
+
+  // Create topics for visualization
+  ros::NodeHandle nh;
+  ros::Publisher pathMarker_pub = nh.advertise<visualization_msgs::MarkerArray>
+                                    ("/" + ns + "/path_markers", 1);
+  ros::Publisher wpMarker_pub = nh.advertise<visualization_msgs::MarkerArray>
+                                    ("/" + ns + "/waypoint_markers", 1);
+
+  // Variables
+  waypoint_and_trajectory wp_and_traj;
+  bool new_traj = false;
+  double distance = std::numeric_limits<double>::infinity();
+  std::string frame_id = "map";
+  visualization_msgs::MarkerArray TrajMarkers, WaypointMarkers, delete_markers;
+
+  // Delete current markers
+  loop_rate.sleep();
+  visualization_functions::deleteMarkersTemplate(frame_id, &delete_markers);
+  pathMarker_pub.publish(delete_markers);
+  wpMarker_pub.publish(delete_markers);
+
+  while (ros::ok()) {
+    mutexes_.wp_traj_buffer.lock();
+        if(!globals_.wp_traj_list.empty()) {
+            wp_and_traj = globals_.wp_traj_list.front();
+            globals_.wp_traj_list.pop();
+            new_traj = true;
+        } else {
+            new_traj = false;
+        }
+    mutexes_.wp_traj_buffer.unlock();
+
+    // m_delete_markers.lock();
+    //   if(delete_markers_) {
+    //     TrajMarkers.markers.clear();
+    //     WaypointMarkers.markers.clear();
+    //     delete_markers_ = false;
+    //   }
+    // m_delete_markers.unlock();
+
+    // If new trajectory, create Rviz markers
+    if (new_traj) {
+      if(wp_and_traj.flatStates_.PVAJS_array.size() > 0) {
+        visualization_functions::drawTrajectory(wp_and_traj.flatStates_, frame_id, wp_and_traj.traj_name_, traj_color_, &TrajMarkers);
+      }
+      visualization_functions::drawWaypoints(wp_and_traj.Waypoints_, frame_id, &WaypointMarkers);
+    
+      //Publish new markers
+      pathMarker_pub.publish(TrajMarkers);
+      wpMarker_pub.publish(WaypointMarkers);
+    }
+
+    loop_rate.sleep();
+  }
 }
 
 }  // namespace mission_planner

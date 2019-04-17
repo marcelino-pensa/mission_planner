@@ -1,7 +1,7 @@
 
 
-#ifndef VICON_INSPECTOR_CLASS_H_
-#define VICON_INSPECTOR_CLASS_H_
+#ifndef VICON_SWARM_INSPECTOR_CLASS_H_
+#define VICON_SWARM_INSPECTOR_CLASS_H_
 
 // Ros libraries
 #include <ros/ros.h>
@@ -50,7 +50,8 @@ class InspectorClass {
                      std::vector<mission_planner::xyz_heading> *waypoint_list);
 
   // Method for publishing visualization markers of the desired waypoints
-  void PublishWaypointMarkers(const std::vector<mission_planner::xyz_heading> &waypoint_list);
+  void PublishWaypointMarkers(const std::vector<mission_planner::xyz_heading> &waypoint_list,
+                              const uint &color_index);
 
   // Method for publishing tf transform between vicon and slam frames
   void RelTfPubTask(const geometry_msgs::Pose &pose);
@@ -58,16 +59,16 @@ class InspectorClass {
  private:
 
   // Namespace of the current node
-  std::string ns_;
+  std::vector<std::string> ns_;
 
-  // List of waypoints for inspection procedure
-  std::vector<mission_planner::xyz_heading> inspection_waypoint_list_;
+  // List of waypoints for inspection procedure for each drone
+  std::vector<std::vector<mission_planner::xyz_heading> > inspection_waypoint_list_;
 
   // Navigation parameters
   double max_velocity_;
 
-  // Mission class
-  mission_planner::MissionClass mission_;
+  // Mission classes
+  std::vector<mission_planner::MissionClass*> mission_;
 
   // Relative pose between vicon frame and slam frame
   geometry_msgs::Pose relative_pose_;
@@ -88,4 +89,4 @@ class InspectorClass {
 
 }  // namespace inspector
 
-#endif  // VICON_INSPECTOR_CLASS_H_
+#endif  // VICON_SWARM_INSPECTOR_CLASS_H_

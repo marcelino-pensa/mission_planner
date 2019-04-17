@@ -30,14 +30,47 @@ geometry_msgs::Point eigenvec2rospoint(const Eigen::Vector3d &vec) {
 	return Pt;
 }
 
+geometry_msgs::Point eigenvec2d2rospoint(const Eigen::Vector2d &vec) {
+	geometry_msgs::Point Pt;
+	Pt.x = vec[0]; Pt.y = vec[1]; Pt.z = 0.0;
+	return Pt;
+}
+
+geometry_msgs::Point eigenvec2d2rospoint(const Eigen::Vector2d &vec,
+	                                     const double height) {
+	geometry_msgs::Point Pt;
+	Pt.x = vec[0]; Pt.y = vec[1]; Pt.z = height;
+	return Pt;
+}
+
+geometry_msgs::Vector3 setvector3(const double &x, const double &y, const double &z) {
+	geometry_msgs::Vector3 vec3;
+	vec3.x = x; vec3.y = y; vec3.z = z;
+	return vec3;
+}
+
 geometry_msgs::Vector3 eigenvec2rosvec(const Eigen::Vector3d &vec) {
 	geometry_msgs::Vector3 vec3;
 	vec3.x = vec[0]; vec3.y = vec[1]; vec3.z = vec[2];
 	return vec3;
 }
 
+geometry_msgs::Vector3 eigenvec2rosvec(const Eigen::Vector2d &vec) {
+	geometry_msgs::Vector3 vec3;
+	vec3.x = vec[0]; vec3.y = vec[1]; vec3.z = 0.0;
+	return vec3;
+}
+
 Eigen::Vector3d rostfvec2eigenvec(const tf::Vector3 &vec) {
 	return Eigen::Vector3d(vec.x(), vec.y(), vec.z());
+}
+
+Eigen::Vector3d rospoint2eigenvec(const geometry_msgs::Point & p) {
+  return Eigen::Vector3d(p.x, p.y, p.z);
+}
+
+Eigen::Quaterniond ros2eigenquat(const geometry_msgs::Quaternion & q) {
+  return Eigen::Quaterniond(q.w, q.x, q.y, q.z);
 }
 
 geometry_msgs::Quaternion set_quat(const double &roll, const double &pitch, const double &yaw) {
@@ -89,6 +122,16 @@ mg_msgs::PVAJ_request get_empty_PVAJ() {
 	PVAJ.use_yaw = false;
 	PVAJ.use_yaw_dot = false;
 	return PVAJ;
+}
+
+mg_msgs::PVA_request get_empty_PVA() {
+	mg_msgs::PVA_request PVA;
+	PVA.use_pos = false;
+	PVA.use_vel = false;
+	PVA.use_acc = false;
+	PVA.use_yaw = false;
+	PVA.use_yaw_dot = false;
+	return PVA;
 }
 
 std::vector<std::pair<uint, uint>> split_waypoints(const uint &n_waypoints,

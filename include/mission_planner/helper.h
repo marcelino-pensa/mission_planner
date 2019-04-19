@@ -18,6 +18,8 @@ double deg2rad(const double &deg);
 
 double rad2deg(const double &rad);
 
+geometry_msgs::Point set_rospoint(const double &x, const double &y, const double &z);
+
 geometry_msgs::Point rosvec2rospoint(const geometry_msgs::Vector3 &vec);
 
 geometry_msgs::Point rostfvec2rospoint(const tf::Vector3 &vec);

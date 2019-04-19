@@ -3,7 +3,7 @@
 #include <mission_planner/rover_mission_class.h>
 
 // ---------------------------------------------------
-namespace mission_planner {
+namespace rover_planner {
 
 RoverMissionClass::RoverMissionClass(const std::string &ns, const double &tf_update_rate,
                                      const double &max_velocity, const uint &rover_index) {
@@ -25,23 +25,24 @@ void RoverMissionClass::Initialize(const std::string &ns, const double &tf_updat
     max_velocity_ = max_velocity;
     visualization_functions::SelectColor(rover_index, &traj_color_);
 
-    // // Start threads --------------------------------------------------------------
-    // h_tf_thread_ = std::thread(&RoverMissionClass::TfTask, this);
-    // h_min_acc_thread_ = std::thread(&RoverMissionClass::MinAccSolverTask, this, ns_);
+    // Start threads --------------------------------------------------------------
+    h_tf_thread_ = std::thread(&RoverMissionClass::TfTask, this);
+    h_min_acc_thread_ = std::thread(&RoverMissionClass::MinAccSolverTask, this, ns_);
     // h_trajectory_caller_thread_ = std::thread(&RoverMissionClass::TrajectoryActionCaller, this, ns_);
-    // h_rviz_pub_thread_ = std::thread(&RoverMissionClass::RvizPubThread, this, ns_);
+    h_rviz_pub_thread_ = std::thread(&RoverMissionClass::RvizPubThread, this, ns_);
 }
 
 void RoverMissionClass::AddWaypoints2Buffer(const std::vector<Eigen::Vector2d> &waypoints, const Eigen::Vector2d &init_vel,
                                        const Eigen::Vector2d &final_vel, const double &max_vel, const double &max_acc,
-                                       const double &sampling_time, const std::string &traj_name, Eigen::Vector2d *final_waypoint) {
+                                       const std::string &traj_name, Eigen::Vector2d *final_waypoint) {
     if(waypoints.size() <= 1) {
         ROS_WARN("[%s mission_node] Not enough waypoints to add!", ns_.c_str());
         return;
     }
 
     mutexes_.waypoint_buffer.lock();
-        globals_.min_acc_inputs.push(minAccWpInputs(waypoints, init_vel, final_vel, max_vel, max_acc, traj_name));
+        globals_.min_acc_inputs.push(
+            rover_planner::minAccWpInputs(waypoints, init_vel, final_vel, max_vel, max_acc, traj_name));
     mutexes_.waypoint_buffer.unlock();
 
     *final_waypoint = waypoints[waypoints.size()-1];
@@ -74,7 +75,7 @@ bool RoverMissionClass::MinAccPoint2Point(const std::string &ns, const Eigen::Ve
                                           std::vector<mg_msgs::PolyPVA> *polyX, std::vector<mg_msgs::PolyPVA> *polyY) {
 
     // Set service client
-    std::string service_name = "/" + ns + "/minAcc";
+    std::string service_name = "/" + ns + "/minAccSolver";
     ros::ServiceClient client = nh->serviceClient<mg_msgs::minAccXYWpPVA>(service_name);
     mg_msgs::PVA_request Wp0 = helper::get_empty_PVA();
     mg_msgs::PVA_request Wp1 = helper::get_empty_PVA();
@@ -129,7 +130,7 @@ bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const std::vect
                                           const double &max_vel, const double &max_acc, ros::NodeHandle *nh,
                                           std::vector<mg_msgs::PolyPVA> *polyX, std::vector<mg_msgs::PolyPVA> *polyY) {
     // Set service client
-    std::string service_name = "/" + ns + "/minAccOptTime";
+    std::string service_name = "/" + ns + "/minAccSolver";
     ros::ServiceClient client = nh->serviceClient<mg_msgs::minAccXYWpPVA>(service_name);
     geometry_msgs::Point Pos0, Pos_mid, Pos_final;
     std::vector<mg_msgs::PVA_request> PVA_array;
@@ -154,13 +155,17 @@ bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const std::vect
         PVA.use_pos = true;
         // ROS_INFO("x: %f\ty: %f\tz: %f\t", PVA.Pos.x, PVA.Pos.y, PVA.Pos.z);
 
-        // Add velocity to initial and final waypoints
+        // Add velocity and acceleration to initial and final waypoints
         if (i == 0) {
             PVA.Vel = helper::eigenvec2rosvec(init_vel);
             PVA.use_vel = true;
+            PVA.Acc = helper::setvector3(0.0, 0.0, 0.0);
+            PVA.use_acc = true;
         } else if (i == n_w - 1) {
             PVA.Vel = helper::eigenvec2rosvec(final_vel);
             PVA.use_vel = true;
+            PVA.Acc = helper::setvector3(0.0, 0.0, 0.0);
+            PVA.use_acc = true;
             total_displacement += (waypoints[i] - waypoints[i-1]).norm();
         } else {
             total_displacement += (waypoints[i] - waypoints[i-1]).norm();
@@ -200,24 +205,24 @@ bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const std::vect
     return true;
 }
 
-bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const minAccWpInputs &Inputs, ros::NodeHandle *nh,
+bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const rover_planner::minAccWpInputs &Inputs, ros::NodeHandle *nh,
                                           std::vector<mg_msgs::PolyPVA> *polyX, std::vector<mg_msgs::PolyPVA> *polyY) {
     this->MinAccWaypointSet(ns, Inputs.waypoints_, Inputs.init_vel_, Inputs.final_vel_,
                             Inputs.max_vel_, Inputs.max_acc_, nh, polyX, polyY);
 }
 
-void RoverMissionClass::CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
+void RoverMissionClass::CallActionType(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs, 
                                        const bool &wait_until_done, ros::NodeHandle *nh,
                                        actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> *client) {
     // If halt, remove all trajectories from list and stop action
-    if(traj_inputs.action_type == ActionType::Halt) {
+    if(traj_inputs.action_type == rover_planner::ActionType::Halt) {
         // Remove all trajectories from list
         mutexes_.trajectory_buffer.lock();
             while(globals_.traj_inputs.size() > 0) {
                 globals_.traj_inputs.pop_front();
             }
         mutexes_.trajectory_buffer.unlock();
-    } else if (traj_inputs.action_type == ActionType::Trajectory) {
+    } else if (traj_inputs.action_type == rover_planner::ActionType::Trajectory) {
         this->CallPVAAction(ns, traj_inputs, wait_until_done, nh, client);
         
         // Remove trajectory from list
@@ -227,7 +232,7 @@ void RoverMissionClass::CallActionType(const std::string &ns, const TrajectoryAc
     }
 }
 
-bool RoverMissionClass::CallPVAAction(const std::string &ns, const TrajectoryActionInputs &traj_inputs,
+bool RoverMissionClass::CallPVAAction(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs,
                                       const bool &wait_until_done, ros::NodeHandle *nh) {
     // Send takeoff trajectory to px4_control action that handles trajectories
     std::string action_name = "/" + ns + "/follow_PolyPVA_XY_trajectoryAction";
@@ -237,7 +242,7 @@ bool RoverMissionClass::CallPVAAction(const std::string &ns, const TrajectoryAct
     return this->CallPVAAction(ns, traj_inputs, wait_until_done, nh, &followPVA_action_client);
 }
 
-bool RoverMissionClass::CallPVAAction(const std::string &ns, const TrajectoryActionInputs &traj_inputs,
+bool RoverMissionClass::CallPVAAction(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs,
                                       const bool &wait_until_done, ros::NodeHandle *nh,
                                       actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> *client) {
 
@@ -290,4 +295,4 @@ void RoverMissionClass::ReturnWhenIdle() {
     }
 }
 
-} // namespace mission_planner
+} // namespace rover_planner

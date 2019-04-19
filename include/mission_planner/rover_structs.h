@@ -1,9 +1,8 @@
 
-#ifndef MISSION_DRONE_STRUCTS_H_
-#define MISSION_DRONE_STRUCTS_H_
+#ifndef MISSION_ROVER_STRUCTS_H_
+#define MISSION_ROVER_STRUCTS_H_
 
 #include <mission_planner/helper.h>
-#include <mission_planner/xyz_heading.h>
 #include <mutex>
 #include <queue>
 #include <Eigen/Dense>
@@ -16,7 +15,7 @@
 #include "mg_msgs/PVA_request.h"
 #include "mg_msgs/PVA_array.h"
 
-namespace mission_planner {
+namespace rover_planner {
 
 class minAccWpInputs {
  public:
@@ -110,6 +109,6 @@ struct mutexStruct {
 };
 
 
-}  // namespace mission_planner
+}  // namespace rover_planner
 
-#endif  // MISSION_DRONE_STRUCTS_H_
+#endif  // MISSION_ROVER_STRUCTS_H_

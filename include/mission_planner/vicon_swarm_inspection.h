@@ -11,6 +11,7 @@
 
 // Mission Planner Class
 #include <mission_planner/mission_class.h>
+#include <mission_planner/rover_mission_class.h>
 #include <mission_planner/xyz_heading.h>
 
 // Service types

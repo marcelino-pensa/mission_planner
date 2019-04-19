@@ -12,6 +12,12 @@ double rad2deg(const double &rad) {
 	return rad*180.0/M_PI;
 }
 
+geometry_msgs::Point set_rospoint(const double &x, const double &y, const double &z) {
+	geometry_msgs::Point pt;
+	pt.x = x; pt.y = y; pt.z = z;
+	return pt;
+}
+
 geometry_msgs::Point rosvec2rospoint(const geometry_msgs::Vector3 &vec) {
 	geometry_msgs::Point Pt;
 	Pt.x = vec.x; Pt.y = vec.y; Pt.z = vec.z;

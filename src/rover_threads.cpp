@@ -1,7 +1,7 @@
 
 #include <mission_planner/rover_mission_class.h>
 
-namespace mission_planner {
+namespace rover_planner {
 
 // Thread for constantly updating the tfTree values
 void RoverMissionClass::TfTask() {
@@ -33,8 +33,8 @@ void RoverMissionClass::MinAccSolverTask(const std::string &ns) {
 
     ros::NodeHandle nh;
     ros::Rate loop_rate(10); // Runs at 10hz
-    std::queue<mission_planner::minAccWpInputs> min_acc_inputs_queue;
-    mission_planner::minAccWpInputs min_acc_input;
+    std::queue<rover_planner::minAccWpInputs> min_acc_inputs_queue;
+    rover_planner::minAccWpInputs min_acc_input;
 
     // Load desired average velocity
     double max_vel = max_velocity_;
@@ -53,7 +53,7 @@ void RoverMissionClass::MinAccSolverTask(const std::string &ns) {
         }
 
         // Solve minimum acceleration problem
-        mission_planner::TrajectoryActionInputs traj_inputs;
+        rover_planner::TrajectoryActionInputs traj_inputs;
         if (min_acc_input.waypoints_.size() < 2) {
             ROS_WARN("[%s mission_node] Cannot solve minimum acc: not enough waypoints!", ns.c_str());
         } else if(min_acc_input.waypoints_.size() == 2) {
@@ -65,11 +65,12 @@ void RoverMissionClass::MinAccSolverTask(const std::string &ns) {
             this->MinAccWaypointSet(ns, min_acc_input, &nh, &traj_inputs.polyX, &traj_inputs.polyY);
         }
         traj_inputs.start_immediately = false;
-        traj_inputs.action_type = ActionType::Trajectory;
+        traj_inputs.action_type = rover_planner::ActionType::Trajectory;
 
         // Add to list for Rviz publishing
         mutexes_.wp_traj_buffer.lock();
-            globals_.wp_traj_list.push(waypoint_and_trajectory(min_acc_input.waypoints_, traj_inputs.polyX, traj_inputs.polyY, min_acc_input.name_));
+            globals_.wp_traj_list.push(rover_planner::waypoint_and_trajectory(
+                min_acc_input.waypoints_, traj_inputs.polyX, traj_inputs.polyY, min_acc_input.name_));
         mutexes_.wp_traj_buffer.unlock();
 
         // Add to buffer of quad trajectories
@@ -97,8 +98,8 @@ void RoverMissionClass::TrajectoryActionCaller(const std::string &ns) {
     ros::Rate loop_rate(10); // Runs at 10hz
     const bool wait_until_done = false;
     bool action_server_busy;
-    std::list<TrajectoryActionInputs> traj_inputs;
-    TrajectoryActionInputs local_traj_inputs;
+    std::list<rover_planner::TrajectoryActionInputs> traj_inputs;
+    rover_planner::TrajectoryActionInputs local_traj_inputs;
 
     mutexes_.rover_is_busy.lock();
         globals_.rover_is_busy = false;
@@ -172,7 +173,7 @@ void RoverMissionClass::RvizPubThread(const std::string &ns) {
                                     ("/" + ns + "/waypoint_markers", 1);
 
   // Variables
-  waypoint_and_trajectory wp_and_traj;
+  rover_planner::waypoint_and_trajectory wp_and_traj;
   bool new_traj = false;
   double distance = std::numeric_limits<double>::infinity();
   std::string frame_id = "map";
@@ -218,4 +219,4 @@ void RoverMissionClass::RvizPubThread(const std::string &ns) {
   }
 }
 
-}  // namespace mission_planner
+}  // namespace rover_planner

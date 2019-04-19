@@ -36,7 +36,7 @@
 // Eigen-based libraries
 #include <Eigen/Dense>
 
-namespace mission_planner {
+namespace rover_planner {
 
 class RoverMissionClass {
  public:
@@ -52,7 +52,7 @@ class RoverMissionClass {
   // Helper function to add waypoints into the buffer
   void AddWaypoints2Buffer(const std::vector<Eigen::Vector2d> &waypoints, const Eigen::Vector2d &init_vel,  
                            const Eigen::Vector2d &final_vel, const double &max_vel, const double &max_acc,
-                           const double &sampling_time, const std::string &traj_name, Eigen::Vector2d *final_waypoint);
+                           const std::string &traj_name, Eigen::Vector2d *final_waypoint);
 
   // Returns current pose of the vehicle - thread safe
   tf::StampedTransform GetCurrentPose();
@@ -72,20 +72,20 @@ class RoverMissionClass {
                          std::vector<mg_msgs::PolyPVA> *polyX, std::vector<mg_msgs::PolyPVA> *polyY);
 
   // Different template for the function above
-  bool MinAccWaypointSet(const std::string &ns, const minAccWpInputs &Inputs, ros::NodeHandle *nh,
+  bool MinAccWaypointSet(const std::string &ns, const rover_planner::minAccWpInputs &Inputs, ros::NodeHandle *nh,
                          std::vector<mg_msgs::PolyPVA> *polyX, std::vector<mg_msgs::PolyPVA> *polyY);
 
   // Calls different action types (Halt, disarm, PVAJS trajectory)
-  void CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
+  void CallActionType(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs, 
                       const bool &wait_until_done, ros::NodeHandle *nh,
                       actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> *client);
 
   // Method for sending a PVAJS trajectory to the action server
-  bool CallPVAAction(const std::string &ns, const TrajectoryActionInputs &traj_inputs,
+  bool CallPVAAction(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs,
                      const bool &wait_until_done, ros::NodeHandle *nh);
 
   // Similar to construction above, but the client is declared outside the function
-  bool CallPVAAction(const std::string &ns, const TrajectoryActionInputs &traj_inputs,
+  bool CallPVAAction(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs,
                      const bool &wait_until_done, ros::NodeHandle *nh,
                      actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> *client);
 
@@ -115,8 +115,8 @@ class RoverMissionClass {
 
  private:
   // Declare global variables (structures defined in structs.h)
-  globalVariables globals_;  // These variables are all mutex-protected
-  mutexStruct mutexes_;
+  rover_planner::globalVariables globals_;  // These variables are all mutex-protected
+  rover_planner::mutexStruct mutexes_;
 
   // Namespace of the current node
   std::string ns_;
@@ -138,6 +138,6 @@ class RoverMissionClass {
 
 };
 
-}  // namespace mission_planner
+}  // namespace rover_planner
 
 #endif  // ROVER_MISSION_CLASS_H_

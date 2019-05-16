@@ -169,6 +169,13 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
         mission_[i]->AddWaypoints2Buffer(waypoints, init_vel, final_vel, max_vel, max_acc, sampling_time, name, &final_waypoint[i]);
     }
 
+    // Wait until quads are done with landing before executing the next step of the mission
+    ROS_INFO("[mission_node] Wait until quad is idle...");
+    for (uint i = 0; i < ns_.size(); i++) {
+        mission_[i]->ReturnWhenIdle();
+        ROS_INFO("[%s mission_node] Quad is idle!", ns_[i].c_str());
+    }
+
     // Land
     for (uint i = 0; i < ns_.size(); i++) {
         waypoints.clear();

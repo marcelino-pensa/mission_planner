@@ -17,6 +17,7 @@
 #include "mg_msgs/minSnapWpStamped.h"
 #include "mg_msgs/minSnapWpPVAJ.h"
 #include "mg_msgs/PVAJ_request.h"
+#include "mapper/RRT_RRG_PRM.h"
 
 // Msg/srv types
 #include "std_srvs/Trigger.h"

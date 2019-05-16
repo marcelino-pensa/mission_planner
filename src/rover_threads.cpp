@@ -64,6 +64,7 @@ void RoverMissionClass::MinAccSolverTask(const std::string &ns) {
         } else {
             this->MinAccWaypointSet(ns, min_acc_input, &nh, &traj_inputs.polyX, &traj_inputs.polyY);
         }
+
         traj_inputs.start_immediately = false;
         traj_inputs.action_type = rover_planner::ActionType::Trajectory;
 
@@ -106,7 +107,8 @@ void RoverMissionClass::TrajectoryActionCaller(const std::string &ns) {
     mutexes_.rover_is_busy.unlock();
 
     // Create action handle
-    std::string action_name = "/" + ns + "/follow_PolyPVA_trajectory_action";
+    // std::string action_name = "/" + ns + "/follow_PolyPVA_trajectory_action";
+    std::string action_name = "/Gollum";
     actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> 
     		followPolyPVA_action_client(action_name, true);
 
@@ -186,7 +188,7 @@ void RoverMissionClass::RvizPubThread(const std::string &ns) {
   wpMarker_pub.publish(delete_markers);
 
   // Trajectory variables
-  const double sampling_period = 0.1; // in seconds
+  const double sampling_period = 0.05; // in seconds
   const double rover_height = 0.1;    // in meters
   std::vector<Eigen::Vector2d> sampled_traj;
   std::vector<double> time;

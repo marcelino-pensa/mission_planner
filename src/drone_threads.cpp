@@ -11,6 +11,8 @@ void MissionClass::TfTask() {
 
     std::string vehicle_frame = ns_ + "/base_link";
     std::string map_frame = "map";
+    ROS_INFO("[mission_planner]: tf task started for tf from %s to %s.",
+             vehicle_frame.c_str(), map_frame.c_str());
 
     while (ros::ok()) {
         // Get the transforms

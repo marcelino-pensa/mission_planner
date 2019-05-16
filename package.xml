@@ -22,6 +22,7 @@
   <buildtool_depend>catkin</buildtool_depend>
   <build_depend>mavros_msgs</build_depend>
   <build_depend>mg_msgs</build_depend>
+  <build_depend>mapper</build_depend>
   <build_depend>rocpp</build_depend>
   <build_depend>std_msgs</build_depend>
   <build_depend>px4_control</build_depend>
@@ -29,6 +30,7 @@
 
   <build_export_depend>mavros_msgs</build_export_depend>
   <build_export_depend>mg_msgs</build_export_depend>
+  <build_export_depend>mapper</build_export_depend>
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>std_msgs</build_export_depend>
   <build_export_depend>px4_control</build_export_depend>
@@ -36,6 +38,7 @@
   
   <exec_depend>mavros_msgs</exec_depend>
   <exec_depend>mg_msgs</exec_depend>
+  <exec_depend>mapper</exec_depend>
   <exec_depend>roscpp</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <exec_depend>px4_control</exec_depend>

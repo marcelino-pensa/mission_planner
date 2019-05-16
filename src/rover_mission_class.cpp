@@ -28,7 +28,7 @@ void RoverMissionClass::Initialize(const std::string &ns, const double &tf_updat
     // Start threads --------------------------------------------------------------
     h_tf_thread_ = std::thread(&RoverMissionClass::TfTask, this);
     h_min_acc_thread_ = std::thread(&RoverMissionClass::MinAccSolverTask, this, ns_);
-    // h_trajectory_caller_thread_ = std::thread(&RoverMissionClass::TrajectoryActionCaller, this, ns_);
+    h_trajectory_caller_thread_ = std::thread(&RoverMissionClass::TrajectoryActionCaller, this, ns_);
     h_rviz_pub_thread_ = std::thread(&RoverMissionClass::RvizPubThread, this, ns_);
 }
 
@@ -176,7 +176,7 @@ bool RoverMissionClass::MinAccWaypointSet(const std::string &ns, const std::vect
     }
 
     // Estimate final time
-    const double tf = total_displacement/max_vel;
+    const double tf = 1.5*total_displacement/max_vel;
 
     // Set time estimates for the PVA array
     const double n_wd = n_w;    // Same value as n_w, but double data type
@@ -235,7 +235,8 @@ void RoverMissionClass::CallActionType(const std::string &ns, const rover_planne
 bool RoverMissionClass::CallPVAAction(const std::string &ns, const rover_planner::TrajectoryActionInputs &traj_inputs,
                                       const bool &wait_until_done, ros::NodeHandle *nh) {
     // Send takeoff trajectory to px4_control action that handles trajectories
-    std::string action_name = "/" + ns + "/follow_PolyPVA_XY_trajectoryAction";
+    // std::string action_name = "/" + ns + "/follow_PolyPVA_trajectory_action";
+    std::string action_name = ns.c_str();
     actionlib::SimpleActionClient<mg_msgs::follow_PolyPVA_XY_trajectoryAction> 
         followPVA_action_client(action_name, true);
 
@@ -255,7 +256,7 @@ bool RoverMissionClass::CallPVAAction(const std::string &ns, const rover_planner
     ROS_INFO("[%s mission_node] Action server started, sending goal.", ns_.c_str());
     mg_msgs::follow_PolyPVA_XY_trajectoryGoal action_msg_goal;
     action_msg_goal.X = traj_inputs.polyX;
-    action_msg_goal.Y = traj_inputs.polyX;
+    action_msg_goal.Y = traj_inputs.polyY;
     client->sendGoal(action_msg_goal);
 
     if (wait_until_done) {

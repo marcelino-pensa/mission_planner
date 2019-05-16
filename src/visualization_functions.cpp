@@ -104,7 +104,7 @@ void drawTrajectory(const mg_msgs::PVAJS_array &flatStates,
   line_strip.scale.x = 0.01;
   line_strip.ns = ns;
 
-  double min_displacement = 0.1;
+  double min_displacement = 0.025;
 
   Eigen::Vector3d last_position = Eigen::Vector3d::Zero();
   Eigen::Vector3d last_appended_position = Eigen::Vector3d::Zero();
@@ -159,7 +159,7 @@ void drawTrajectory(const std::vector<Eigen::Vector2d> &trajectory,
   line_strip.scale.x = 0.01;
   line_strip.ns = ns;
 
-  double min_displacement = 0.1;
+  double min_displacement = 0.025;
 
   Eigen::Vector2d last_position = Eigen::Vector2d::Zero();
   Eigen::Vector2d last_appended_position = Eigen::Vector2d::Zero();

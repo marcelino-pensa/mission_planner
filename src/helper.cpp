@@ -140,6 +140,24 @@ mg_msgs::PVA_request get_empty_PVA() {
 	return PVA;
 }
 
+mg_msgs::PVAJS_array pva2pvajs(const std::vector<p4_ros::PVA> &PVA) {
+	mg_msgs::PVAJS_array pvajs_array;
+	for (uint i = 0; i < PVA.size(); i++) {
+        mg_msgs::PVAJS new_flat_state;
+        new_flat_state.Pos = PVA[i].pos;
+        new_flat_state.Vel = PVA[i].vel;
+        new_flat_state.Acc = PVA[i].acc;
+        new_flat_state.time = PVA[i].time;
+        new_flat_state.Jerk = helper::setvector3(0.0, 0.0, 0.0);
+        new_flat_state.Snap = helper::setvector3(0.0, 0.0, 0.0);
+        new_flat_state.yaw = 0.0;
+        new_flat_state.yaw_dot = 0.0;
+        new_flat_state.yaw_ddot = 0.0;
+        pvajs_array.PVAJS_array.push_back(new_flat_state);
+    }
+    return pvajs_array;
+}
+
 std::vector<std::pair<uint, uint>> split_waypoints(const uint &n_waypoints,
 	                                               const uint &wp_per_segment) {
 	uint n_segments = std::ceil(double(n_waypoints-1.0)/double(wp_per_segment));

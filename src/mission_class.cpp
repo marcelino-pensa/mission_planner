@@ -6,28 +6,32 @@
 namespace mission_planner {
 
 MissionClass::MissionClass(const std::string &ns, const double &tf_update_rate,
-                           const double &max_velocity, const uint &drone_index) {
-    this->Initialize(ns, tf_update_rate, max_velocity, drone_index);
+                           const double &max_velocity, const double &max_acceleration, 
+                           const double &max_jerk, const uint &drone_index) {
+    this->Initialize(ns, tf_update_rate, max_velocity, max_acceleration, max_jerk, drone_index);
 }
 
 MissionClass::~MissionClass() {
     // Join all threads
     h_tf_thread_.join();
-    h_min_snap_thread_.join();
+    h_min_time_thread_.join();
     h_trajectory_caller_thread_.join();
     h_rviz_pub_thread_.join();
 }
 
 void MissionClass::Initialize(const std::string &ns, const double &tf_update_rate,
-                              const double &max_velocity, const uint &drone_index) {
+                              const double &max_velocity,  const double &max_acceleration, 
+                              const double &max_jerk, const uint &drone_index) {
     ns_ = ns;
     tf_update_rate_ = tf_update_rate;
     max_velocity_ = max_velocity;
+    max_acceleration_ = max_acceleration;
+    max_jerk_ = max_jerk;
     visualization_functions::SelectColor(drone_index, &traj_color_);
 
     // Start threads --------------------------------------------------------------
     h_tf_thread_ = std::thread(&MissionClass::TfTask, this);
-    h_min_snap_thread_ = std::thread(&MissionClass::MinSnapSolverTask, this, ns_);
+    h_min_time_thread_ = std::thread(&MissionClass::MinTimeSolverTask, this);
     h_trajectory_caller_thread_ = std::thread(&MissionClass::TrajectoryActionCaller, this, ns_);
     h_rviz_pub_thread_ = std::thread(&MissionClass::RvizPubThread, this, ns_);
 }
@@ -102,6 +106,21 @@ void MissionClass::AddWaypoints2Buffer(const std::vector<xyz_heading> &waypoints
     *final_waypoint = waypoints[waypoints.size()-1];
 }
 
+void MissionClass::AddMinTimeWp2Buffer(const std::vector<xyz_heading> &waypoints, const double &max_vel,
+                                       const double &max_acc, const double &max_jerk,
+                                       const double &sampling_time, xyz_heading *final_waypoint) {
+    if(waypoints.size() <= 1) {
+        ROS_WARN("[%s mission_node] Not enough waypoints to add!", ns_.c_str());
+        return;
+    }
+
+    mutexes_.waypoint_buffer.lock();
+        globals_.min_time_inputs.push(minTimeWpInputs(waypoints, max_vel, max_acc, max_jerk, sampling_time, ""));
+    mutexes_.waypoint_buffer.unlock();
+
+    *final_waypoint = waypoints[waypoints.size()-1];
+}
+
 void MissionClass::AddDisarm2Buffer() {
     mutexes_.waypoint_buffer.lock();
         globals_.min_snap_inputs.push(minSnapWpInputs("Disarm"));
@@ -151,6 +170,53 @@ bool MissionClass::Takeoff(const std::string &ns, const double &takeoff_height, 
     return 1;
 }
 
+bool MissionClass::TakeoffMinTime(const std::string &ns, const double &takeoff_height, const double &sampling_time,
+                                  const double &max_vel, const double &max_acc, const double &max_jerk,
+                                  ros::NodeHandle *nh, xyz_heading *final_xyz_yaw) {
+    // Get current pose
+    tf_listener::TfClass tf_initial_pose;
+    mutexes_.tf.lock();
+        tf_initial_pose.transform_ = globals_.tf_quad2world;
+    mutexes_.tf.unlock();
+    double yaw, pitch, roll;
+    tf_initial_pose.transform_.getBasis().getRPY(roll, pitch, yaw);
+
+    // Plan a minimum time trajectory for taking-off (need to take at least 1sec to takeoff)
+    Eigen::Vector3d init_pos = helper::rostfvec2eigenvec(tf_initial_pose.transform_.getOrigin());
+    Eigen::Vector3d final_pos = init_pos + Eigen::Vector3d(0.0, 0.0, takeoff_height);
+
+    // Get smooth trajectory for take-off
+    mission_planner::TrajectoryActionInputs traj_inputs;
+    std::vector<p4_ros::PVA> PVA;
+    if (!this->MinTimePoint2Point(ns, init_pos, final_pos, yaw, yaw, 
+                                  max_vel, max_acc, max_jerk, sampling_time, nh, &PVA)) {
+        return 0;
+    }
+
+    // Go from PVA to traj_inputs.flatStates
+    traj_inputs.flatStates = helper::pva2pvajs(PVA);
+    traj_inputs.start_immediately = false;
+    traj_inputs.sampling_time = sampling_time;
+    traj_inputs.action_type = ActionType::Trajectory;
+
+    mutexes_.trajectory_buffer.lock();
+        globals_.traj_inputs.push_back(traj_inputs);
+    mutexes_.trajectory_buffer.unlock();
+
+    *final_xyz_yaw = xyz_heading(final_pos, yaw);
+
+    // Add to list for Rviz publishing
+    std::string name = ns + "/takeoff";
+    std::vector<xyz_heading> waypoints;
+    waypoints.push_back(xyz_heading(init_pos, yaw));
+    waypoints.push_back(xyz_heading(final_pos, yaw));
+    mutexes_.wp_traj_buffer.lock();
+        globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
+    mutexes_.wp_traj_buffer.unlock();
+
+    return 1;
+}
+
 // Method for landing from a current location (plan it locally)
 bool MissionClass::Land(const std::string &ns, const double &land_height, const double &sampling_time,
                         const double &avg_velocity, ros::NodeHandle *nh) {
@@ -187,6 +253,55 @@ bool MissionClass::Land(const std::string &ns, const double &land_height, const 
     std::vector<xyz_heading> waypoints;
     waypoints.push_back(xyz_heading(init_pos, yaw));
     waypoints.push_back(xyz_heading(pos_final, yaw));
+    mutexes_.wp_traj_buffer.lock();
+        globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
+    mutexes_.wp_traj_buffer.unlock();
+
+    return 1;
+}
+
+bool MissionClass::LandMinTime(const std::string &ns, const double &land_height, const double &sampling_time,
+                               const double &max_vel, const double &max_acc, const double &max_jerk,
+                               ros::NodeHandle *nh, xyz_heading *final_xyz_yaw) {
+    // Get current pose
+    tf_listener::TfClass tf_initial_pose;
+    mutexes_.tf.lock();
+        tf_initial_pose.transform_ = globals_.tf_quad2world;
+    mutexes_.tf.unlock();
+    double yaw, pitch, roll;
+    tf_initial_pose.transform_.getBasis().getRPY(roll, pitch, yaw);
+
+    // Plan a minimum time trajectory for landing
+    Eigen::Vector3d init_pos = helper::rostfvec2eigenvec(tf_initial_pose.transform_.getOrigin());
+    Eigen::Vector3d final_pos = init_pos;
+    final_pos[2] = land_height;
+    double height = fabs(init_pos[2] - land_height);
+
+    // Get smooth trajectory for take-off
+    mission_planner::TrajectoryActionInputs traj_inputs;
+    std::vector<p4_ros::PVA> PVA;
+    if (!this->MinTimePoint2Point(ns, init_pos, final_pos, yaw, yaw, max_vel,
+                                  max_acc, max_jerk, sampling_time, nh, &PVA)) {
+        return 0;
+    }
+
+    // Go from PVA to traj_inputs.flatStates
+    traj_inputs.flatStates = helper::pva2pvajs(PVA);
+    traj_inputs.start_immediately = false;
+    traj_inputs.sampling_time = sampling_time;
+    traj_inputs.action_type = ActionType::Trajectory;
+
+    mutexes_.trajectory_buffer.lock();
+        globals_.traj_inputs.push_back(traj_inputs);
+    mutexes_.trajectory_buffer.unlock();
+
+    *final_xyz_yaw = xyz_heading(final_pos, yaw);
+
+    // Add to list for Rviz publishing
+    std::string name = ns + "/takeoff";
+    std::vector<xyz_heading> waypoints;
+    waypoints.push_back(xyz_heading(init_pos, yaw));
+    waypoints.push_back(xyz_heading(final_pos, yaw));
     mutexes_.wp_traj_buffer.lock();
         globals_.wp_traj_list.push(waypoint_and_trajectory(waypoints, traj_inputs.flatStates, name));
     mutexes_.wp_traj_buffer.unlock();
@@ -364,6 +479,72 @@ bool MissionClass::MinSnapPoint2Point(const std::string &ns, const xyz_heading &
                              init_wp.GetYaw(), final_wp.GetYaw(), tf, sampling_time, nh, flatStates);
 }
 
+bool MissionClass::MinTimePoint2Point(const std::string &ns, const Eigen::Vector3d &init_point,
+                                      const Eigen::Vector3d &final_point, const double &yaw0, 
+                                      const double &yaw_final, const double &max_vel,
+                                      const double &max_acc, const double &max_jerk, 
+                                      const double &sampling_time, ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA) {
+    // Unwrap yaw
+    double yaw_f = yaw_final;
+    while (yaw0 - yaw_f > M_PI) {
+      yaw_f = yaw_f + 2*M_PI;
+    }
+    while (yaw0 - yaw_f < -M_PI) {
+      yaw_f = yaw_f - 2*M_PI;
+    }
+
+    // Set service client
+    std::string service_name = "/p4_services/min_time_solver";
+    ros::ServiceClient client = nh->serviceClient<p4_ros::min_time>(service_name);
+    geometry_msgs::PoseStamped Pos0, Pos_mid, Pos_final;
+
+    // Set first point
+    Pos0.pose.position = helper::eigenvec2rospoint(init_point);
+    Pos0.pose.orientation = helper::set_quat(0.0, 0.0, yaw0);
+
+    // An intermediate point is needed for the minimum snap solver
+    Pos_mid.pose.position = helper::eigenvec2rospoint(0.5*(init_point + final_point));
+    Pos_mid.pose.orientation = helper::set_quat(0.0, 0.0, 0.5*(yaw0 + yaw_f));
+
+    // Set final point
+    Pos_final.pose.position = helper::eigenvec2rospoint(final_point);
+    Pos_final.pose.orientation = helper::set_quat(0.0, 0.0, yaw_f);
+
+    // Push points into waypoint structure
+    p4_ros::min_time req;
+    req.request.pos_array.push_back(Pos0.pose.position);
+    req.request.pos_array.push_back(Pos_mid.pose.position);
+    req.request.pos_array.push_back(Pos_final.pose.position);
+
+    req.request.sampling_freq = 1.0/sampling_time;
+    req.request.corridor_width = 0.1;
+    req.request.max_vel = max_vel;
+    req.request.max_acc = max_acc;
+    req.request.max_jerk = max_jerk;
+    req.request.visualize_output = false;
+    if (client.call(req)) {
+        // ROS_INFO("Return size: %d", int(srv.response.flatStates.PVAJS_array.size()));
+        ROS_INFO("[%s mission_node] Service returned succesfully with point to point trajectory!", ns_.c_str());
+    } else {
+        ROS_ERROR("[%s mission_node] Failed to call service ""%s"" for point to point trajectory...", ns_.c_str(),
+                  client.getService().c_str());
+        return false;
+    }
+
+    *PVA = req.response.pva_vec;
+
+    return true;
+}
+
+bool MissionClass::MinTimePoint2Point(const std::string &ns, const xyz_heading &init_wp, 
+                                      const xyz_heading &final_wp, const double &max_vel,
+                                      const double &max_acc, const double &max_jerk, const double &sampling_time,
+                                      ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA) {
+    this->MinTimePoint2Point(ns, init_wp.GetEigenXYZ(), final_wp.GetEigenXYZ(),
+                             init_wp.GetYaw(), final_wp.GetYaw(), max_vel, 
+                             max_acc, max_jerk, sampling_time, nh, PVA);
+}
+
 bool MissionClass::MinSnapWaypointSet(const std::string &ns, const std::vector<xyz_heading> waypoints,
                                       const Eigen::Vector3d &init_vel, const Eigen::Vector3d &final_vel,
                                       const double &max_vel, const double &max_acc, const double &sampling_time,
@@ -455,6 +636,44 @@ bool MissionClass::MinSnapWaypointSet(const std::string &ns, const minSnapWpInpu
                              nh, flatStates);
 }
 
+bool MissionClass::MinTimeWaypointSet(const std::string &ns, const std::vector<xyz_heading> waypoints,
+                                      const double &max_vel, const double &max_acc, const double &max_jerk,
+                                      const double &sampling_time, ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA) {
+    // Set service client
+    std::string service_name = "/p4_services/min_time_solver";
+    ros::ServiceClient client = nh->serviceClient<p4_ros::min_time>(service_name);
+    p4_ros::min_time req;
+
+    const uint n_w = waypoints.size();
+
+    if(n_w <= 2) {
+        ROS_ERROR("[%s mission_node] Not enough waypoints to plan a minimum snap trajectory", ns_.c_str());
+    }
+
+    // Set the waypoints into the appropriate structure
+    for (uint i = 0; i < n_w; i++) {
+        req.request.pos_array.push_back(waypoints[i].GetXYZ());
+    }
+
+    req.request.sampling_freq = 1.0/sampling_time;
+    req.request.corridor_width = 0.1;
+    req.request.max_vel = max_vel;
+    req.request.max_acc = max_acc;
+    req.request.max_jerk = max_jerk;
+    req.request.visualize_output = false;
+    if (client.call(req)) {
+        ROS_INFO("[%s mission_node] Service returned succesfully with waypoint trajectory!", ns_.c_str());
+    } else {
+        ROS_ERROR("[%s mission_node] Failed to call service ""%s"" for waypoint trajectory...", ns_.c_str(),
+                  client.getService().c_str());
+        return false;
+    }
+
+    *PVA = req.response.pva_vec;
+
+    return true;
+}
+
 void MissionClass::CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
                                   const bool &wait_until_done, ros::NodeHandle *nh,
                                   actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> *client) {
@@ -491,7 +710,8 @@ bool MissionClass::CallPVAJSAction(const std::string &ns, const mg_msgs::PVAJS_a
                                      const double &sampling_time, const bool &wait_until_done,
                                      ros::NodeHandle *nh) {
     // Send takeoff trajectory to px4_control action that handles trajectories
-    std::string action_name = "/" + ns + "/follow_PVAJS_trajectory_action";
+    // std::string action_name = "/" + ns + "/follow_PVAJS_trajectory_action";
+    std::string action_name = "/follow_PVAJS_trajectory_action";
     actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> 
         followPVAJS_action_client(action_name, true);
 

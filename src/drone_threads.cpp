@@ -9,8 +9,8 @@ void MissionClass::TfTask() {
     tf_listener::TfClass obj_quad2world;
     ros::Rate loop_rate(tf_update_rate_);
 
-    std::string vehicle_frame = ns_ + "/base_link";
-    std::string map_frame = "map";
+    std::string vehicle_frame = "camera_pose_frame";
+    std::string map_frame = "camera_pose_frame";
     ROS_INFO("[mission_planner]: tf task started for tf from %s to %s.",
              vehicle_frame.c_str(), map_frame.c_str());
 
@@ -98,6 +98,79 @@ void MissionClass::MinSnapSolverTask(const std::string &ns) {
     ROS_DEBUG("[mission_node] Exiting MinSnapSolverTask...");
 }
 
+// Consumer/producer thread
+// Consume waypoints to produce minimum time trajectories
+void MissionClass::MinTimeSolverTask() {
+    ROS_INFO("[mission_node] MinTimeSolverTask started.");
+
+    ros::NodeHandle nh;
+    ros::Rate loop_rate(10); // Runs at 10hz
+    std::queue<mission_planner::minTimeWpInputs> min_time_inputs_queue;
+    mission_planner::minTimeWpInputs min_time_input;
+
+    while (ros::ok()) {
+
+        mutexes_.waypoint_buffer.lock();
+            min_time_inputs_queue = globals_.min_time_inputs;
+        mutexes_.waypoint_buffer.unlock();
+
+        // See if there is anything in the buffer
+        if (min_time_inputs_queue.size() > 0) {
+            min_time_input = min_time_inputs_queue.front();
+        } else {
+            loop_rate.sleep();
+            continue;
+        }
+
+        const double max_vel = min_time_input.max_vel_, max_acc = min_time_input.max_acc_;
+        const double max_jerk = min_time_input.max_jerk_;
+
+        mission_planner::TrajectoryActionInputs traj_inputs;
+        if (min_time_input.name_.compare("Disarm") == 0) {  // Disarm command
+            traj_inputs.start_immediately = false;
+            traj_inputs.action_type = ActionType::Disarm;
+        } else {  // Trajectory command
+            // Solve minimum time problem
+            if (min_time_input.waypoints_.size() < 2) {
+                ROS_WARN("Cannot solve minimum time: not enough waypoints!");
+            } else if(min_time_input.waypoints_.size() == 2) {
+                std::vector<p4_ros::PVA> PVA;
+                this->MinTimePoint2Point(ns_, min_time_input.waypoints_[0],
+                              min_time_input.waypoints_[1], max_vel, max_acc, max_jerk,
+                              min_time_input.sampling_time_, &nh, &PVA);
+                traj_inputs.flatStates = helper::pva2pvajs(PVA);
+            } else {
+                std::vector<p4_ros::PVA> PVA;
+                this->MinTimeWaypointSet(ns_, min_time_input.waypoints_, max_vel, max_acc, max_jerk,
+                                         min_time_input.sampling_time_, &nh, &PVA);
+                traj_inputs.flatStates = helper::pva2pvajs(PVA);
+            }
+            traj_inputs.start_immediately = false;
+            traj_inputs.sampling_time = min_time_input.sampling_time_;
+            traj_inputs.action_type = ActionType::Trajectory;
+
+            // Add to list for Rviz publishing
+            mutexes_.wp_traj_buffer.lock();
+                globals_.wp_traj_list.push(waypoint_and_trajectory(min_time_input.waypoints_, traj_inputs.flatStates, min_time_input.name_));
+            mutexes_.wp_traj_buffer.unlock();
+        }
+
+        // Add to buffer of quad trajectories
+        mutexes_.trajectory_buffer.lock();
+            globals_.traj_inputs.push_back(traj_inputs);
+        mutexes_.trajectory_buffer.unlock();
+
+        // Remove waypoints from of min time inputs
+        mutexes_.waypoint_buffer.lock();
+            globals_.min_time_inputs.pop();
+        mutexes_.waypoint_buffer.unlock();
+
+        loop_rate.sleep();
+    }
+
+    ROS_DEBUG("[mission_node] Exiting MinTimeSolverTask...");
+}
+
 // Consumer thread
 // Consumes minimum snap trajectories
 void MissionClass::TrajectoryActionCaller(const std::string &ns) {
@@ -105,7 +178,7 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
 
     ros::NodeHandle nh;
     ros::Rate loop_rate(10); // Runs at 10hz
-    const bool wait_until_done = false;
+    const bool wait_until_done = true;
     bool action_server_busy;
     std::list<TrajectoryActionInputs> traj_inputs;
     TrajectoryActionInputs local_traj_inputs;
@@ -115,7 +188,8 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
     mutexes_.quad_is_busy.unlock();
 
     // Create action handle
-    std::string action_name = "/" + ns + "/follow_PVAJS_trajectory_action";
+    // std::string action_name = "/" + ns + "/follow_PVAJS_trajectory_action";
+    std::string action_name = "/follow_PVAJS_trajectory_action";
     actionlib::SimpleActionClient<mg_msgs::follow_PVAJS_trajectoryAction> 
     		followPVAJS_action_client(action_name, true);
 
@@ -124,6 +198,12 @@ void MissionClass::TrajectoryActionCaller(const std::string &ns) {
         mutexes_.trajectory_buffer.lock();
         	traj_inputs = globals_.traj_inputs;
         mutexes_.trajectory_buffer.unlock();
+
+        if (!followPVAJS_action_client.isServerConnected()) {
+            ROS_WARN("[mission_node] px4_controller action server not connected!");
+            loop_rate.sleep();
+            continue;
+        }
 
         // Get current state of the action server
         actionlib::SimpleClientGoalState status = followPVAJS_action_client.getState();

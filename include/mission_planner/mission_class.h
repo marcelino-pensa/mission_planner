@@ -17,7 +17,8 @@
 #include "mg_msgs/minSnapWpStamped.h"
 #include "mg_msgs/minSnapWpPVAJ.h"
 #include "mg_msgs/PVAJ_request.h"
-#include "mapper/RRT_RRG_PRM.h"
+#include "p4_ros/min_time.h"
+#include "p4_ros/PVA.h"
 
 // Msg/srv types
 #include "std_srvs/Trigger.h"
@@ -44,12 +45,14 @@ class MissionClass {
  public:
   MissionClass() {};
   MissionClass(const std::string &ns, const double &tf_update_rate,
-               const double &max_velocity, const uint &drone_index = 0);
+               const double &max_velocity, const double &max_acceleration, 
+               const double &max_jerk, const uint &drone_index=0);
   ~MissionClass();
 
   //Methods -------------------------------------------------------
   void Initialize(const std::string &ns, const double &tf_update_rate,
-                  const double &max_velocity, const uint &drone_index = 0);
+                  const double &max_velocity, const double &max_acceleration, 
+                  const double &max_jerk, const uint &drone_index = 0);
 
   // Method for starting the quadcopter to listen to PVA messages
   void SetQuadPosMode(const std::string &ns, ros::NodeHandle *nh);
@@ -67,6 +70,11 @@ class MissionClass {
                                        const Eigen::Vector3d &final_vel, const double &max_vel, const double &max_acc,
                                        const double &sampling_time, const std::string &traj_name, xyz_heading *final_waypoint);
 
+  // Helper function to add waypoints into the minimum time buffer
+  void AddMinTimeWp2Buffer(const std::vector<xyz_heading> &waypoints, const double &max_vel,
+                           const double &max_acc, const double &max_jerk,
+                           const double &sampling_time, xyz_heading *final_waypoint);
+
   // Add disarm command to buffer (quad disarms after finishes all other previous commands)
   void AddDisarm2Buffer();
 
@@ -74,9 +82,19 @@ class MissionClass {
   bool Takeoff(const std::string &ns, const double &takeoff_height, const double &sampling_time,
                const double &avg_velocity, ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
 
+  // Takeoff using minimum time solver
+  bool TakeoffMinTime(const std::string &ns, const double &takeoff_height, const double &sampling_time,
+                      const double &max_vel, const double &max_acc, const double &max_jerk,
+                      ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
+
   // Method for landing from a current location
   bool Land(const std::string &ns, const double &land_height, const double &sampling_time,
             const double &avg_velocity, ros::NodeHandle *nh);
+
+  // Method for landing from a current location in minimum time
+  bool LandMinTime(const std::string &ns, const double &land_height, const double &sampling_time,
+                   const double &max_vel, const double &max_acc, const double &max_jerk,
+                   ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
 
   // Method for landing from a current location (use px4_control autoland)
   bool Land(const std::string &ns, ros::NodeHandle *nh);
@@ -109,6 +127,19 @@ class MissionClass {
                           const double &sampling_time, ros::NodeHandle *nh,
                           mg_msgs::PVAJS_array *flatStates);
 
+  // Method for getting a minimum time trajectory between two points only
+  bool MinTimePoint2Point(const std::string &ns, const Eigen::Vector3d &init_point,
+                          const Eigen::Vector3d &final_point, const double &yaw0, 
+                          const double &yaw_final, const double &max_vel,
+                          const double &max_acc, const double &max_jerk, 
+                          const double &sampling_time, ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA);
+
+  // Same as before, but with different template
+  bool MinTimePoint2Point(const std::string &ns, const xyz_heading &init_wp, 
+                          const xyz_heading &final_wp, const double &max_vel,
+                          const double &max_acc, const double &max_jerk, const double &sampling_time,
+                          ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA);
+
   // Method for getting minimum snap trajectories for multiple waypoints
   bool MinSnapWaypointSet(const std::string &ns, const std::vector<xyz_heading> waypoints,
                           const Eigen::Vector3d &init_vel, const Eigen::Vector3d &final_vel,
@@ -117,6 +148,11 @@ class MissionClass {
   // Different template for the function above
   bool MinSnapWaypointSet(const std::string &ns, const minSnapWpInputs &Inputs,
                           ros::NodeHandle *nh, mg_msgs::PVAJS_array *flatStates);
+
+  // Method for getting minimum time trajectories for multiple waypoints
+  bool MinTimeWaypointSet(const std::string &ns, const std::vector<xyz_heading> waypoints,
+                          const double &max_vel, const double &max_acc, const double &max_jerk,
+                          const double &sampling_time, ros::NodeHandle *nh, std::vector<p4_ros::PVA> *PVA);
 
   // Calls different action types (Halt, disarm, PVAJS trajectory)
   void CallActionType(const std::string &ns, const TrajectoryActionInputs &traj_inputs, 
@@ -150,6 +186,9 @@ class MissionClass {
   // Thread that reads waypoints from a buffer to solve minimum snap problems
   void MinSnapSolverTask(const std::string &ns);
 
+  // Thread that reads waypoints from a buffer to solve minimum time problems
+  void MinTimeSolverTask();
+
   // Consumer thread
   // Consumes minimum snap trajectories (sends to action server)
   void TrajectoryActionCaller(const std::string &ns);
@@ -167,7 +206,7 @@ class MissionClass {
   std::string ns_;
 
   // Thread variables
-  std::thread h_tf_thread_, h_min_snap_thread_, h_trajectory_caller_thread_, h_rviz_pub_thread_;
+  std::thread h_tf_thread_, h_min_time_thread_, h_trajectory_caller_thread_, h_rviz_pub_thread_;
 
   // Subscriber variables
   ros::Subscriber action_status_sub_;
@@ -176,7 +215,7 @@ class MissionClass {
   double tf_update_rate_;
 
   // Navigation parameters
-  double max_velocity_;
+  double max_velocity_, max_acceleration_, max_jerk_;
 
   // Rviz trajectory color
   std_msgs::ColorRGBA traj_color_;

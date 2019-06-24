@@ -12,15 +12,11 @@
 #include <mission_planner/mission_class.h>
 #include <mission_planner/xyz_heading.h>
 
-// // Local defined libraries
+// Local defined libraries
+#include "p4_ros/min_time.h"
 // #include <mission_planner/drone_structs.h>
 // #include <mission_planner/helper.h>
 // #include <mission_planner/tf_class.h>
-
-// // Msg/srv defined in other packages
-// #include "mg_msgs/minSnapWpStamped.h"
-// #include "mg_msgs/minSnapWpPVAJ.h"
-// #include "mg_msgs/PVAJ_request.h"
 
 // // Msg/srv types
 // #include "std_srvs/Trigger.h"
@@ -46,32 +42,16 @@ class InspectorClass {
   // the compiled one is executed
   virtual void Mission(ros::NodeHandle *nh);
 
- protected:
-  // Callbacks -------------------------------------------------------
-  void LocalizationCallback(const geometry_msgs::PoseWithCovarianceStamped::ConstPtr& msg);
-
-  // Method for loading waypoints from file
-  bool LoadWaypoints(const std::string &filename,
-                     const tf::StampedTransform &init_pose,
-                     std::vector<mission_planner::xyz_heading> *waypoint_list);
-
-
  private:
 
   // Namespace of the current node
   std::string ns_;
 
-  // List of waypoints for inspection and localization procedures
-  std::vector<mission_planner::xyz_heading> localization_waypoint_list_, inspection_waypoint_list_;
-
   // Navigation parameters
-  double max_velocity_;
+  double max_velocity_, max_acceleration_, max_jerk_;
 
   // Mission class
   mission_planner::MissionClass mission_;
-
-  // Vector that contains corrections obtained from the localizing node
-  std::vector<mission_planner::xyz_heading> correction_list_;
 
 };
 

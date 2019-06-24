@@ -9,6 +9,8 @@
 #include <Eigen/Dense>
 #include "mg_msgs/PVAJ_request.h"
 #include "mg_msgs/PVA_request.h"
+#include "mg_msgs/PVAJS_array.h"
+#include "p4_ros/PVA.h"
 
 #include <cmath>
 
@@ -55,6 +57,8 @@ double getHeadingFromTransform(tf::StampedTransform transform);
 mg_msgs::PVAJ_request get_empty_PVAJ();
 
 mg_msgs::PVA_request get_empty_PVA();
+
+mg_msgs::PVAJS_array pva2pvajs(const std::vector<p4_ros::PVA> &PVA);
 
 std::vector<std::pair<uint, uint>> split_waypoints(const uint &n_waypoints,
 	                                               const uint &wp_per_segment);

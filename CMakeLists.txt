@@ -10,12 +10,11 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
-  tf
-  mavros_msgs
+  tf  
   mg_msgs
   px4_control
-  mav_trajectory_generation_ros
-  mapper
+  cmake_modules
+  p4_ros
 )
 
 find_package(Eigen REQUIRED)
@@ -25,8 +24,9 @@ find_package(Eigen REQUIRED)
 ###################################
 catkin_package(
   DEPENDS Eigen
-  mg_msgs
-  mapper
+)
+catkin_package(
+  DEPENDS mg_msgs p4_ros
 )
 
 ###########
@@ -51,52 +51,6 @@ add_executable(inspector_node
                src/callbacks.cpp
                src/visualization_functions.cpp)
 target_link_libraries(inspector_node ${catkin_LIBRARIES})
-add_dependencies(inspector_node mavros_msgs_generate_messages_cpp mg_msgs_gencpp
-                 mapper_gencpp mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
-                 ${mg_msgs_EXPORTED_TARGETS})
-
-# Rover inspection node
-add_executable(vicon_rover_inspection 
-               src/nodes/mission_node.cpp
-               src/vicon_rover_inspection.cpp
-               src/mission_class.cpp
-               src/drone_threads.cpp
-               src/helper.cpp
-               src/callbacks.cpp
-               src/visualization_functions.cpp)
-target_link_libraries(vicon_rover_inspection ${catkin_LIBRARIES})
-add_dependencies(vicon_rover_inspection mavros_msgs_generate_messages_cpp mg_msgs_gencpp
-                 mapper_gencpp mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
-                 ${mg_msgs_EXPORTED_TARGETS})
-
-# Swarm inspection node
-add_executable(vicon_swarm_inspection 
-               src/nodes/swarm_mission_node.cpp
-               src/vicon_swarm_inspection.cpp
-               src/mission_class.cpp
-               src/drone_threads.cpp
-               src/rover_mission_class.cpp
-               src/rover_threads.cpp
-               src/helper.cpp
-               src/callbacks.cpp
-               src/polynomials.cpp
-               src/visualization_functions.cpp)
-target_link_libraries(vicon_swarm_inspection ${catkin_LIBRARIES})
-add_dependencies(vicon_swarm_inspection mavros_msgs_generate_messages_cpp mg_msgs_gencpp
-                 mapper_gencpp mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
-                 ${mg_msgs_EXPORTED_TARGETS})
-
-# Collision Avoidance node
-add_executable(collision_avoidance_example 
-               src/nodes/collision_avoidance_node.cpp
-               src/vicon_collision_avoidance_example.cpp
-               src/mission_class.cpp
-               src/drone_threads.cpp
-               src/helper.cpp
-               src/callbacks.cpp
-               src/polynomials.cpp
-               src/visualization_functions.cpp)
-target_link_libraries(collision_avoidance_example ${catkin_LIBRARIES})
-add_dependencies(collision_avoidance_example mavros_msgs_generate_messages_cpp mg_msgs_gencpp
-                 mapper_gencpp mav_trajectory_generation_ros_gencpp ${catkin_EXPORTED_TARGETS}
-                 ${mg_msgs_EXPORTED_TARGETS})
+add_dependencies(inspector_node mg_msgs_gencpp p4_ros_gencpp
+                 ${catkin_EXPORTED_TARGETS} ${mg_msgs_EXPORTED_TARGETS}
+                 ${p4_ros_EXPORTED_TARGETS})

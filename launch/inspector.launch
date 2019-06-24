@@ -1,32 +1,25 @@
 <launch>
 
-	<arg name="namespace" default="Gazebo"/>
+	<arg name="namespace" default="Belle"/>
 
-    <group ns="$(arg namespace)">
-	    <node pkg="mission_planner" type="inspector_node" name="inspector_node" output="screen">
+    <node pkg="mission_planner" type="inspector_node" name="inspector_node" output="screen">
 
-	    	<!-- Namespace -->
-	    	<param name="namespace" value="$(arg namespace)"/>
+    	<!-- Namespace -->
+    	<param name="namespace" value="$(arg namespace)"/>
 
-			<!-- Paths for waypoint files -->
-			<param name="localization_waypoints_path" value="$(find control_node)/waypoints/mapping.wp"/>
-			<param name="inspection_waypoints_path" value="$(find control_node)/waypoints/topInspection.wp"/>
+		<!-- Guidance parameters -->
+		<param name="takeoff_height" value="0.75"/> <!-- Takeoff height (in meters) -->
+		<param name="max_velocity" value="0.3"/>   <!-- Maximum speed (in meters/sec) -->
+		<param name="max_acceleration" value="0.3"/>   <!-- Maximum acceleration (in meters/sec^2) -->
+		<param name="max_jerk" value="0.3"/>   <!-- Maximum jerk (in meters/sec^3) -->
 
-			<!-- Guidance parameters -->
-			<param name="takeoff_height" value="3.0"/> <!-- Takeoff height (in meters) -->
-			<param name="max_velocity" value="0.75"/>   <!-- Maximum speed (in meters/sec) -->
+		<!-- Thread update rates (in Hz) -->
+		<param name="tf_update_rate" value="100"/>
+	</node>
 
-			<!-- Thread update rates (in Hz) -->
-			<param name="tf_update_rate" value="100"/>
-		</node>
+  <!-- <node pkg="p4_ros" type="p4_services" name="p4_services" output="screen" required = "true">  </node> -->
 
-    	<node pkg="mav_trajectory_generation_ros" type="minSnap_Node" name="minSnap_Node" output="screen"/> 
-
-    </group>
-
-    <include file="$(find mapper)/launch/mapper_ns.launch">
-		<arg name="namespace" value="$(arg namespace)" />
-	</include>
+  <!-- <node name="visualization" pkg="rviz" type="rviz" output="log" args="-d $(find p4_ros)/launch/rviz_config/time_optimizer.rviz" /> -->
 
 	<!-- <include file="$(find simulations_ros)/launch/localization.launch">  -->
 		<!-- <arg name="namespace" value="$(arg namespace)" /> -->

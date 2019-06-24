@@ -95,7 +95,7 @@ void drawTrajectory(const mg_msgs::PVAJS_array &flatStates,
                     const std_msgs::ColorRGBA &color,
                     visualization_msgs::MarkerArray* marker_array) {
   // CHECK_NOTNULL(marker_array);
-  marker_array->markers.clear();
+  // marker_array->markers.clear();
 
   visualization_msgs::Marker line_strip;
   line_strip.id = 0;
@@ -201,15 +201,15 @@ void drawTrajectory(const std::vector<Eigen::Vector2d> &trajectory,
 void drawWaypoints(const nav_msgs::Path &Waypoints, 
                    const std::string& frame_id,
                    visualization_msgs::MarkerArray* marker_array) {
-  marker_array->markers.clear();
+  // marker_array->markers.clear();
 
   visualization_msgs::Marker marker;
   marker.type = visualization_msgs::Marker::SPHERE;
   marker.action = visualization_msgs::Marker::ADD;
   marker.color = Color::Red();
-  marker.scale.x = 0.025;
-  marker.scale.y = 0.025;
-  marker.scale.z = 0.025;
+  marker.scale.x = 0.1;
+  marker.scale.y = 0.1;
+  marker.scale.z = 0.1;
   marker.ns = "path";
   marker.header.frame_id = frame_id;
   marker.header.stamp = ros::Time::now();
@@ -217,11 +217,12 @@ void drawWaypoints(const nav_msgs::Path &Waypoints,
 
   //Get the number of requested waypoints
   int n_w = Waypoints.poses.size();
+  uint init_index = marker_array->markers.size();
 
   for (size_t i = 0; i < n_w; ++i) {
     geometry_msgs::Point last_position_msg = Waypoints.poses[i].pose.position;
     marker.pose.position = last_position_msg;
-    marker.header.seq = i;
+    marker.header.seq = init_index+i;
     marker_array->markers.push_back(marker);
   }
   

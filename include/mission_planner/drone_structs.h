@@ -56,6 +56,42 @@ class minSnapWpInputs {
 	}
 };
 
+class minTimeWpInputs {
+ public:
+	std::vector<xyz_heading> waypoints_;
+	double max_vel_;
+	double max_acc_;
+	double max_jerk_;
+	double sampling_time_;
+	std::string name_;
+
+	minTimeWpInputs() {};
+	minTimeWpInputs(const std::vector<xyz_heading> &waypoints, const double &max_vel,
+					const double &max_acc, const double &max_jerk, const double &sampling_time) {
+		waypoints_ = waypoints;
+		max_vel_ = max_vel;
+		max_acc_ = max_acc;
+		max_jerk_ = max_jerk;
+		sampling_time_ = sampling_time;
+		name_ = "";
+	}
+	minTimeWpInputs(const std::vector<xyz_heading> &waypoints, const double &max_vel,
+		            const double &max_acc, const double &max_jerk,
+		            const double &sampling_time, const std::string &name) {
+		waypoints_ = waypoints;
+		max_vel_ = max_vel;
+		max_acc_ = max_acc;
+		max_jerk_ = max_jerk;
+		sampling_time_ = sampling_time;
+		name_ = name;
+	}
+
+	// Create an action of Halt (name = "Halt") or Disarm (name = "Disarm")
+	minTimeWpInputs(const std::string name) {
+		name_ = name;
+	}
+};
+
 // Class used for visualizing trajectories
 class waypoint_and_trajectory {
  public:
@@ -102,6 +138,9 @@ struct globalVariables {
 
     // Buffer for solving minimum snap problems
 	std::queue<minSnapWpInputs> min_snap_inputs;
+
+	// Buffer for solving minimum time problems
+	std::queue<minTimeWpInputs> min_time_inputs;
 
 	// Buffer for sending trajectories to the quad
 	std::list<TrajectoryActionInputs> traj_inputs;

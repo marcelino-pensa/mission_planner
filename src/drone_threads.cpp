@@ -10,13 +10,14 @@ void MissionClass::TfTask() {
     ros::Rate loop_rate(tf_update_rate_);
 
     std::string vehicle_frame = "camera_pose_frame";
-    std::string map_frame = "camera_pose_frame";
+    std::string map_frame = "camera_odom_frame";
     ROS_INFO("[mission_planner]: tf task started for tf from %s to %s.",
              vehicle_frame.c_str(), map_frame.c_str());
 
     while (ros::ok()) {
         // Get the transforms
         obj_quad2world.GetTransform(vehicle_frame , map_frame);
+        // obj_quad2world.PrintTransform();
 
         mutexes_.tf.lock();
             globals_.tf_quad2world = obj_quad2world.transform_;

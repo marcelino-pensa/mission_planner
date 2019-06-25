@@ -26,11 +26,11 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
     mission_.Initialize(ns_, tf_update_rate, max_velocity_, max_acceleration_, max_jerk_);
 
     // Wait until measurements are available
-    ROS_INFO("[mission_node] Wait for first pose...");
-    tf::StampedTransform tf_initial_pose = mission_.WaitForFirstPose();
-    mission_planner::xyz_heading origin(tf_initial_pose);
-    ROS_INFO("[mission_node] First pose obtained from tf tree!");
-    // mission_planner::xyz_heading origin(0.0, 0.0, 0.0, 0.0);
+    // ROS_INFO("[mission_node] Wait for first pose...");
+    // tf::StampedTransform tf_initial_pose = mission_.WaitForFirstPose();
+    // mission_planner::xyz_heading origin(tf_initial_pose);
+    // ROS_INFO("[mission_node] First pose obtained from tf tree!");
+    mission_planner::xyz_heading origin(0.0, 0.0, 0.0, 0.0);
 
     // Variable for setting waypoints
     std::vector<mission_planner::xyz_heading> waypoints;
@@ -60,8 +60,8 @@ void InspectorClass::Mission(ros::NodeHandle *nh) {
 
     // Takeoff
     ROS_INFO("[mission_node] Asking for takeoff command...");
-    mission_.TakeoffMinTime(ns_, takeoff_height-origin.z_, sampling_time, max_vel, 
-             max_acc, max_jerk, nh, &final_waypoint);
+    mission_.TakeoffMinTime(ns_, origin, takeoff_height-origin.z_, sampling_time,
+             max_vel, max_acc, max_jerk, nh, &final_waypoint);
     
     // // Go to initial waypoint in the set
     // ROS_INFO("[mission_node] Go to initial waypoint...");

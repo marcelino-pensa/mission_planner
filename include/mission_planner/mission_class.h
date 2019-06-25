@@ -83,7 +83,8 @@ class MissionClass {
                const double &avg_velocity, ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
 
   // Takeoff using minimum time solver
-  bool TakeoffMinTime(const std::string &ns, const double &takeoff_height, const double &sampling_time,
+  bool TakeoffMinTime(const std::string &ns, const mission_planner::xyz_heading origin,
+                      const double &takeoff_height, const double &sampling_time,
                       const double &max_vel, const double &max_acc, const double &max_jerk,
                       ros::NodeHandle *nh, xyz_heading *final_xyz_yaw);
 

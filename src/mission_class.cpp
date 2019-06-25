@@ -170,19 +170,13 @@ bool MissionClass::Takeoff(const std::string &ns, const double &takeoff_height, 
     return 1;
 }
 
-bool MissionClass::TakeoffMinTime(const std::string &ns, const double &takeoff_height, const double &sampling_time,
+bool MissionClass::TakeoffMinTime(const std::string &ns, const mission_planner::xyz_heading origin,
+                                  const double &takeoff_height, const double &sampling_time,
                                   const double &max_vel, const double &max_acc, const double &max_jerk,
                                   ros::NodeHandle *nh, xyz_heading *final_xyz_yaw) {
-    // Get current pose
-    tf_listener::TfClass tf_initial_pose;
-    mutexes_.tf.lock();
-        tf_initial_pose.transform_ = globals_.tf_quad2world;
-    mutexes_.tf.unlock();
-    double yaw, pitch, roll;
-    tf_initial_pose.transform_.getBasis().getRPY(roll, pitch, yaw);
-
     // Plan a minimum time trajectory for taking-off (need to take at least 1sec to takeoff)
-    Eigen::Vector3d init_pos = helper::rostfvec2eigenvec(tf_initial_pose.transform_.getOrigin());
+    double yaw = origin.yaw_;
+    Eigen::Vector3d init_pos = origin.GetEigenXYZ();
     Eigen::Vector3d final_pos = init_pos + Eigen::Vector3d(0.0, 0.0, takeoff_height);
 
     // Get smooth trajectory for take-off

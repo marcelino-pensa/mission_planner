@@ -1,0 +1,28 @@
+<launch>
+
+	<arg name="namespace" default="Belle"/>
+
+    <node pkg="mission_planner" type="inspector_node" name="inspector_node" output="screen">
+
+    	<!-- Namespace -->
+    	<param name="namespace" value="$(arg namespace)"/>
+
+		<!-- Guidance parameters -->
+		<param name="takeoff_height" value="0.75"/> <!-- Takeoff height (in meters) -->
+		<param name="max_velocity" value="0.3"/>   <!-- Maximum speed (in meters/sec) -->
+		<param name="max_acceleration" value="0.3"/>   <!-- Maximum acceleration (in meters/sec^2) -->
+		<param name="max_jerk" value="0.3"/>   <!-- Maximum jerk (in meters/sec^3) -->
+
+		<!-- Thread update rates (in Hz) -->
+		<param name="tf_update_rate" value="100"/>
+	</node>
+
+  <!-- <node pkg="p4_ros" type="p4_services" name="p4_services" output="screen" required = "true">  </node> -->
+
+  <!-- <node name="visualization" pkg="rviz" type="rviz" output="log" args="-d $(find p4_ros)/launch/rviz_config/time_optimizer.rviz" /> -->
+
+	<!-- <include file="$(find simulations_ros)/launch/localization.launch">  -->
+		<!-- <arg name="namespace" value="$(arg namespace)" /> -->
+	<!-- </include> -->
+
+</launch>

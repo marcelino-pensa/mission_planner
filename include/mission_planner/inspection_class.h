@@ -42,6 +42,8 @@ class InspectorClass {
   // the compiled one is executed
   virtual void Mission(ros::NodeHandle *nh);
 
+  virtual void ShelfMission(ros::NodeHandle *nh);
+
  private:
 
   // Namespace of the current node
